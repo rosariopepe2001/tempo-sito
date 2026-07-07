@@ -16,7 +16,7 @@
 </script>
 <meta charset="utf-8">
 <title>Tempo — cronometro, sveglia e calendario</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
   /* Palette "ambra del tempo + indigo notte" */
   :root {
@@ -83,9 +83,8 @@
     50% { transform: scale(1.04); }
   }
   @keyframes squilla {
-    0%, 100% { transform: translate(-50%, 0) rotate(0); }
-    20% { transform: translate(-50%, 0) rotate(.6deg); }
-    60% { transform: translate(-50%, 0) rotate(-.6deg); }
+    0%, 100% { box-shadow: 0 8px 30px rgba(220, 38, 38, .35); }
+    50% { box-shadow: 0 8px 44px rgba(220, 38, 38, .75); }
   }
   @keyframes deriva-a {
     from { transform: translate(-8%, -6%) scale(1); }
@@ -433,22 +432,36 @@
 
   /* Banner allarme */
   #banner-allarme {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    position: fixed; left: 50%;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
     background: linear-gradient(135deg, #C2410C, #DC2626); color: #fff;
-    border-radius: 16px; padding: 16px 22px;
-    display: none; align-items: center; gap: 18px;
-    box-shadow: 0 8px 30px rgba(0,0,0,.35);
-    z-index: 50; max-width: calc(100vw - 32px);
+    border-radius: 18px; padding: 16px 22px;
+    display: none; align-items: center; gap: 16px;
+    box-shadow: 0 8px 30px rgba(220, 38, 38, .35);
+    z-index: 50; max-width: calc(100vw - 24px);
   }
   #banner-allarme.visibile {
     display: flex;
     animation: banner-su .3s cubic-bezier(.2, 1.2, .4, 1) both,
                squilla 1.2s ease-in-out .4s infinite;
   }
-  #banner-allarme .msg { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
-  #banner-allarme .msg small { display: block; font-weight: 400; opacity: .85; font-size: 13px; }
-  #banner-allarme .btn { border-color: rgba(255,255,255,.5); background: transparent; color: #fff; }
+  #banner-allarme .msg { font-weight: 700; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
+  #banner-allarme .msg small { display: block; font-weight: 400; opacity: .9; font-size: 14px; margin-top: 2px; }
+  #banner-allarme .btn {
+    border-color: rgba(255,255,255,.55); background: transparent; color: #fff;
+    min-height: 44px; white-space: nowrap;
+  }
   #banner-allarme .btn.pieno { background: #fff; color: #B91C1C; border-color: #fff; }
+  @media (max-width: 600px) {
+    #banner-allarme {
+      flex-wrap: wrap; justify-content: center;
+      width: calc(100vw - 24px); padding: 18px 18px 16px;
+      text-align: center; gap: 10px;
+    }
+    #banner-allarme .msg { flex: 1 1 100%; font-size: 18px; }
+    #banner-allarme .btn { flex: 1 1 0; font-size: 15px; }
+  }
 
   @media (max-width: 560px) {
     .elenco .ora { font-size: 21px; min-width: 70px; }
