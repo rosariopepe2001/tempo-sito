@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="it">
+<meta charset="utf-8">
+<title>Tempo — cronometro, sveglia e calendario</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --ink: #17191E;
+    --muted: #6A6E78;
+    --line: #E3E2DB;
+    --accent: #C93327;
+    --accent-soft: #C9332715;
+    --good: #2E7D4F;
+    --shadow: 0 1px 2px rgba(23,25,30,.05), 0 4px 16px rgba(23,25,30,.05);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161A;
+      --surface: #1C1F25;
+      --ink: #EDECE7;
+      --muted: #9A9EA8;
+      --line: #2B2F37;
+      --accent: #E8564A;
+      --accent-soft: #E8564A22;
+      --good: #5BB98A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F4F0; --surface: #FFFFFF; --ink: #17191E; --muted: #6A6E78;
+    --line: #E3E2DB; --accent: #C93327; --accent-soft: #C9332715;
+    --good: #2E7D4F;
+    --shadow: 0 1px 2px rgba(23,25,30,.05), 0 4px 16px rgba(23,25,30,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161A; --surface: #1C1F25; --ink: #EDECE7; --muted: #9A9EA8;
+    --line: #2B2F37; --accent: #E8564A; --accent-soft: #E8564A22;
+    --good: #5BB98A;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+  }
+
+  * { box-sizing: border-box; }
+
+  /* ---- Animazioni ---- */
+  @keyframes entrata {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes comparsa-riga {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes banner-su {
+    from { opacity: 0; transform: translate(-50%, 24px) scale(.96); }
+    to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  }
+  @keyframes batti {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+  @keyframes squilla {
+    0%, 100% { transform: translate(-50%, 0) rotate(0); }
+    20% { transform: translate(-50%, 0) rotate(.6deg); }
+    60% { transform: translate(-50%, 0) rotate(-.6deg); }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { max-width: 880px; margin: 0 auto; padding: 20px 16px 64px; }
+
+  header.top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px; padding: 4px 4px 16px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent); align-self: center; flex: none;
+  }
+  .brand h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .brand .sub { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  #mini-orologio {
+    font-variant-numeric: tabular-nums;
+    font-size: 15px; color: var(--muted); white-space: nowrap;
+  }
+
+  nav.tabs {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 14px; padding: 4px; box-shadow: var(--shadow);
+    position: sticky; top: 8px; z-index: 5;
+  }
+  nav.tabs button {
+    flex: 1 1 auto; min-width: 90px;
+    border: 0; background: transparent; color: var(--muted);
+    font: inherit; font-size: 13.5px; font-weight: 600;
+    padding: 9px 10px; border-radius: 10px; cursor: pointer;
+    touch-action: manipulation;
+    transition: background .18s ease-out, color .18s ease-out, transform .12s ease-out;
+  }
+  nav.tabs button:hover { color: var(--ink); background: var(--accent-soft); }
+  nav.tabs button:active { transform: scale(.96); }
+  nav.tabs button:focus-visible, .btn:focus-visible, button:focus-visible, input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  nav.tabs button[aria-selected="true"] {
+    background: var(--accent); color: #fff;
+  }
+
+  main { padding-top: 22px; }
+  section[role="tabpanel"] { display: none; }
+  section[role="tabpanel"].attiva {
+    display: block;
+    animation: entrata .28s ease-out both;
+  }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 22px; box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 16px; }
+  .card h2 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
+  .card .hint { margin: 0 0 16px; font-size: 13.5px; color: var(--muted); }
+
+  .etichetta {
+    font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted);
+  }
+
+  /* Readout gigante stile tabellone */
+  .lettura {
+    font-variant-numeric: tabular-nums;
+    font-weight: 200; letter-spacing: -0.02em;
+    font-size: clamp(56px, 13vw, 104px);
+    line-height: 1.05; text-align: center; margin: 10px 0 4px;
+  }
+  .lettura .cs { font-size: .45em; color: var(--muted); font-weight: 300; }
+  .lettura.allarme { color: var(--accent); animation: batti 1s ease-in-out infinite; }
+
+  .comandi { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+
+  .btn {
+    font: inherit; font-weight: 600; font-size: 15px;
+    border-radius: 12px; padding: 11px 22px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    touch-action: manipulation;
+    transition: border-color .18s ease-out, background .18s ease-out,
+                color .18s ease-out, transform .12s ease-out, filter .18s ease-out;
+  }
+  .btn:hover { border-color: var(--muted); transform: translateY(-1px); }
+  .btn:active { transform: scale(.96); }
+  .btn.primario { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primario:hover { filter: brightness(1.08); }
+  .btn.piccolo { padding: 7px 14px; font-size: 13.5px; border-radius: 10px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  /* Orologio analogico */
+  .quadrante-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  #quadrante { width: min(280px, 70vw); height: auto; }
+  #data-oggi { font-size: 15px; color: var(--muted); text-align: center; }
+  #data-oggi b { color: var(--ink); font-weight: 650; }
+
+  /* Giri cronometro */
+  #lista-giri { list-style: none; margin: 18px auto 0; padding: 0; max-width: 380px; }
+  #lista-giri li {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 8px 4px; border-top: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; font-size: 15px;
+  }
+  #lista-giri li:first-child { animation: comparsa-riga .22s ease-out both; }
+  #lista-giri li span:first-child { color: var(--muted); }
+
+  /* Timer preset + input */
+  .preset { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .chip {
+    font: inherit; font-size: 13.5px; font-weight: 600;
+    padding: 7px 14px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    touch-action: manipulation;
+    transition: border-color .18s ease-out, color .18s ease-out,
+                background .18s ease-out, transform .12s ease-out;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .chip:active { transform: scale(.94); }
+  .riga-input { display: flex; gap: 10px; justify-content: center; align-items: end; flex-wrap: wrap; margin-top: 10px; }
+  .campo { display: flex; flex-direction: column; gap: 5px; }
+  .campo input, .campo select {
+    font: inherit; font-size: 16px; font-variant-numeric: tabular-nums;
+    padding: 9px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    min-width: 0;
+  }
+  .campo input[type="number"] { width: 92px; text-align: center; }
+  .barra { height: 6px; border-radius: 3px; background: var(--line); margin-top: 18px; overflow: hidden; }
+  .barra > div { height: 100%; width: 0%; background: var(--accent); transition: width .25s linear; }
+  /* Lancette con scatto morbido da orologio di stazione */
+  #l-ore, #l-min { transition: transform .4s ease-out; }
+  #g-sec { transition: transform .3s cubic-bezier(.35, 1.6, .45, 1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+  }
+
+  /* Liste sveglie / promemoria */
+  .elenco { list-style: none; margin: 16px 0 0; padding: 0; }
+  .elenco li {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 4px; border-top: 1px solid var(--line);
+    animation: comparsa-riga .25s ease-out both;
+  }
+  .elenco .ora {
+    font-variant-numeric: tabular-nums; font-size: 26px; font-weight: 300;
+    min-width: 88px;
+  }
+  .elenco .info { flex: 1; min-width: 0; }
+  .elenco .info .titolo { font-weight: 600; overflow-wrap: anywhere; }
+  .elenco .info .quando { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .elenco li.fatto .titolo { text-decoration: line-through; color: var(--muted); }
+  .elenco li.spenta .ora { color: var(--muted); }
+  .vuoto { color: var(--muted); font-size: 14.5px; padding: 14px 4px 2px; border-top: 1px solid var(--line); margin-top: 16px; }
+
+  /* Interruttore */
+  .switch { position: relative; width: 44px; height: 26px; flex: none; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch .slitta {
+    position: absolute; inset: 0; border-radius: 999px;
+    background: var(--line); transition: background .15s;
+    pointer-events: none;
+  }
+  .switch .slitta::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 20px; height: 20px; border-radius: 50%; background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .15s;
+  }
+  .switch input:checked + .slitta { background: var(--good); }
+  .switch input:checked + .slitta::after { transform: translateX(18px); }
+  .switch input:focus-visible + .slitta { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .btn-x {
+    font: inherit; border: 0; background: transparent; color: var(--muted);
+    font-size: 18px; cursor: pointer; padding: 6px 8px; border-radius: 8px; flex: none;
+  }
+  .btn-x { transition: color .15s ease-out, background .15s ease-out, transform .12s ease-out; }
+  .btn-x:hover { color: var(--accent); background: var(--accent-soft); }
+  .btn-x:active { transform: scale(.85); }
+
+  .check { width: 20px; height: 20px; accent-color: var(--good); flex: none; cursor: pointer; }
+
+  /* Calendario */
+  .cal-testata { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .cal-testata h3 { margin: 0; font-size: 18px; font-weight: 700; text-transform: capitalize; }
+  .cal-nav { display: flex; gap: 6px; }
+  .cal-nav button {
+    font: inherit; font-size: 16px; width: 36px; height: 36px;
+    border-radius: 10px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  .cal-nav button {
+    touch-action: manipulation;
+    transition: border-color .15s ease-out, background .15s ease-out, transform .12s ease-out;
+  }
+  .cal-nav button:hover { border-color: var(--muted); background: var(--accent-soft); }
+  .cal-nav button:active { transform: scale(.92); }
+  .griglia-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .griglia-cal .nome-g {
+    text-align: center; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    padding: 6px 0;
+  }
+  .giorno {
+    position: relative; aspect-ratio: 1 / .82; border-radius: 10px;
+    border: 1px solid transparent; background: transparent;
+    font: inherit; font-size: 14.5px; font-variant-numeric: tabular-nums;
+    color: var(--ink); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    touch-action: manipulation;
+    transition: background .15s ease-out, color .15s ease-out, transform .12s ease-out;
+  }
+  .giorno:hover { background: var(--accent-soft); }
+  .giorno:active { transform: scale(.92); }
+  .griglia-cal, #dettaglio-giorno { animation: entrata .25s ease-out both; }
+  .giorno.altro-mese { color: var(--muted); opacity: .45; }
+  .giorno.oggi { border-color: var(--accent); font-weight: 700; color: var(--accent); }
+  .giorno.selezionato { background: var(--accent); color: #fff; }
+  .giorno .puntino {
+    position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+  }
+  .giorno.selezionato .puntino { background: #fff; }
+  #dettaglio-giorno { margin-top: 16px; }
+  #dettaglio-giorno h4 { margin: 0 0 6px; font-size: 14.5px; text-transform: capitalize; }
+
+  /* Banner allarme */
+  #banner-allarme {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--accent); color: #fff;
+    border-radius: 16px; padding: 16px 22px;
+    display: none; align-items: center; gap: 18px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    z-index: 50; max-width: calc(100vw - 32px);
+  }
+  #banner-allarme.visibile {
+    display: flex;
+    animation: banner-su .3s cubic-bezier(.2, 1.2, .4, 1) both,
+               squilla 1.2s ease-in-out .4s infinite;
+  }
+  #banner-allarme .msg { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+  #banner-allarme .msg small { display: block; font-weight: 400; opacity: .85; font-size: 13px; }
+  #banner-allarme .btn { border-color: rgba(255,255,255,.5); background: transparent; color: #fff; }
+  #banner-allarme .btn.pieno { background: #fff; color: var(--accent); border-color: #fff; }
+
+  @media (max-width: 560px) {
+    .elenco .ora { font-size: 21px; min-width: 70px; }
+    .card { padding: 16px; }
+  }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Tempo</h1>
+      <span class="sub">i tuoi strumenti del tempo</span>
+    </div>
+    <div id="mini-orologio">--:--:--</div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Strumenti">
+    <button role="tab" aria-selected="true"  data-tab="orologio">Orologio</button>
+    <button role="tab" aria-selected="false" data-tab="cronometro">Cronometro</button>
+    <button role="tab" aria-selected="false" data-tab="timer">Timer</button>
+    <button role="tab" aria-selected="false" data-tab="sveglia">Sveglia</button>
+    <button role="tab" aria-selected="false" data-tab="promemoria">Promemoria</button>
+    <button role="tab" aria-selected="false" data-tab="calendario">Calendario</button>
+  </nav>
+
+  <main>
+    <!-- OROLOGIO -->
+    <section role="tabpanel" id="pan-orologio" class="attiva">
+      <div class="card quadrante-wrap">
+        <svg id="quadrante" viewBox="0 0 200 200" aria-hidden="true"></svg>
+        <div class="lettura" id="ora-grande" style="font-size:clamp(40px,9vw,64px)">--:--:--</div>
+        <div id="data-oggi"></div>
+      </div>
+    </section>
+
+    <!-- CRONOMETRO -->
+    <section role="tabpanel" id="pan-cronometro">
+      <div class="card">
+        <h2>Cronometro</h2>
+        <p class="hint">Misura il tempo al centesimo di secondo. Con «Giro» salvi i tempi intermedi.</p>
+        <div class="lettura" id="crono-lettura">00:00<span class="cs">,00</span></div>
+        <div class="comandi">
+          <button class="btn primario" id="crono-avvia">Avvia</button>
+          <button class="btn" id="crono-giro" disabled>Giro</button>
+          <button class="btn" id="crono-azzera" disabled>Azzera</button>
+        </div>
+        <ol id="lista-giri"></ol>
+      </div>
+    </section>
+
+    <!-- TIMER -->
+    <section role="tabpanel" id="pan-timer">
+      <div class="card">
+        <h2>Timer</h2>
+        <p class="hint">Conto alla rovescia: scegli un tempo rapido o imposta minuti e secondi.</p>
+        <div class="preset">
+          <button class="chip" data-min="1">1 min</button>
+          <button class="chip" data-min="3">3 min</button>
+          <button class="chip" data-min="5">5 min</button>
+          <button class="chip" data-min="10">10 min</button>
+          <button class="chip" data-min="25">25 min</button>
+        </div>
+        <div class="riga-input">
+          <label class="campo"><span class="etichetta">Minuti</span>
+            <input type="number" id="timer-min" min="0" max="999" value="5" inputmode="numeric"></label>
+          <label class="campo"><span class="etichetta">Secondi</span>
+            <input type="number" id="timer-sec" min="0" max="59" value="0" inputmode="numeric"></label>
+        </div>
+        <div class="lettura" id="timer-lettura">05:00</div>
+        <div class="barra"><div id="timer-barra"></div></div>
+        <div class="comandi">
+          <button class="btn primario" id="timer-avvia">Avvia</button>
+          <button class="btn" id="timer-azzera" disabled>Azzera</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SVEGLIA -->
+    <section role="tabpanel" id="pan-sveglia">
+      <div class="card">
+        <h2>Sveglia</h2>
+        <p class="hint">Le sveglie suonano se questa pagina resta aperta nel browser. Restano salvate anche se chiudi e riapri.</p>
+        <div class="riga-input">
+          <label class="campo"><span class="etichetta">Ora</span>
+            <input type="time" id="sveglia-ora" value="07:30"></label>
+          <label class="campo" style="flex:1;min-width:180px"><span class="etichetta">Nome (facoltativo)</span>
+            <input type="text" id="sveglia-nome" placeholder="Es. Buongiorno!" maxlength="60"></label>
+          <button class="btn primario" id="sveglia-aggiungi">Aggiungi</button>
+        </div>
+        <ul class="elenco" id="lista-sveglie"></ul>
+        <div class="vuoto" id="sveglie-vuoto">Nessuna sveglia impostata.</div>
+      </div>
+    </section>
+
+    <!-- PROMEMORIA -->
+    <section role="tabpanel" id="pan-promemoria">
+      <div class="card">
+        <h2>Promemoria</h2>
+        <p class="hint">Scrivi cosa devi fare e quando: comparirà anche nel calendario. Spunta la casella quando è fatto.</p>
+        <div class="riga-input">
+          <label class="campo" style="flex:1;min-width:180px"><span class="etichetta">Cosa</span>
+            <input type="text" id="promo-testo" placeholder="Es. Chiamare il dottore" maxlength="120"></label>
+          <label class="campo"><span class="etichetta">Quando</span>
+            <input type="datetime-local" id="promo-quando"></label>
+          <button class="btn primario" id="promo-aggiungi">Aggiungi</button>
+        </div>
+        <ul class="elenco" id="lista-promemoria"></ul>
+        <div class="vuoto" id="promo-vuoto">Nessun promemoria. Aggiungine uno qui sopra.</div>
+      </div>
+    </section>
+
+    <!-- CALENDARIO -->
+    <section role="tabpanel" id="pan-calendario">
+      <div class="card">
+        <div class="cal-testata">
+          <h3 id="cal-titolo"></h3>
+          <div class="cal-nav">
+            <button id="cal-prec" aria-label="Mese precedente">‹</button>
+            <button id="cal-oggi-btn" style="width:auto;padding:0 12px;font-size:13px;font-weight:600">Oggi</button>
+            <button id="cal-succ" aria-label="Mese successivo">›</button>
+          </div>
+        </div>
+        <div class="griglia-cal" id="griglia-cal"></div>
+        <div id="dettaglio-giorno"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="banner-allarme" role="alert">
+  <div class="msg" id="banner-msg">Sveglia!</div>
+  <button class="btn piccolo" id="banner-rinvia">Rinvia 5 min</button>
+  <button class="btn piccolo pieno" id="banner-stop">Ferma</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var due = function (n) { return String(n).padStart(2, "0"); };
+
+  /* ---------- Navigazione a schede ---------- */
+  var tabs = document.querySelectorAll("nav.tabs [role=tab]");
+  tabs.forEach(function (t) {
+    t.addEventListener("click", function () {
+      tabs.forEach(function (x) { x.setAttribute("aria-selected", x === t ? "true" : "false"); });
+      document.querySelectorAll("[role=tabpanel]").forEach(function (p) { p.classList.remove("attiva"); });
+      $("pan-" + t.dataset.tab).classList.add("attiva");
+    });
+  });
+
+  /* ---------- Suono (Web Audio, nessun file esterno) ---------- */
+  var ctxAudio = null;
+  function beep(freq, quando, durata) {
+    var o = ctxAudio.createOscillator(), g = ctxAudio.createGain();
+    o.type = "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, quando);
+    g.gain.exponentialRampToValueAtTime(0.35, quando + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, quando + durata);
+    o.connect(g); g.connect(ctxAudio.destination);
+    o.start(quando); o.stop(quando + durata + 0.05);
+  }
+  var suonoInterval = null;
+  function avviaSuono() {
+    try {
+      if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctxAudio.state === "suspended") ctxAudio.resume();
+      var trillo = function () {
+        var t = ctxAudio.currentTime;
+        beep(880, t, 0.18); beep(660, t + 0.25, 0.18); beep(880, t + 0.5, 0.18);
+      };
+      trillo();
+      if (suonoInterval) clearInterval(suonoInterval);
+      suonoInterval = setInterval(trillo, 1100);
+    } catch (e) { /* audio non disponibile: resta il banner visivo */ }
+  }
+  function fermaSuono() {
+    if (suonoInterval) { clearInterval(suonoInterval); suonoInterval = null; }
+  }
+  // Sblocca l'audio al primo tocco (richiesto dai browser)
+  document.addEventListener("pointerdown", function sblocca() {
+    try {
+      if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+      if (ctxAudio.state === "suspended") ctxAudio.resume();
+    } catch (e) {}
+    document.removeEventListener("pointerdown", sblocca);
+  }, { once: false });
+
+  /* ---------- Notifiche di sistema (facoltative) ---------- */
+  function chiediNotifiche() {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }
+  function notifica(titolo, corpo) {
+    if ("Notification" in window && Notification.permission === "granted") {
+      try { new Notification(titolo, { body: corpo }); } catch (e) {}
+    }
+  }
+
+  /* ---------- Banner allarme ---------- */
+  var rinviaAzione = null;
+  function mostraBanner(titolo, sotto, azioneRinvia) {
+    $("banner-msg").innerHTML = "";
+    var t = document.createTextNode(titolo);
+    $("banner-msg").appendChild(t);
+    if (sotto) {
+      var s = document.createElement("small");
+      s.textContent = sotto;
+      $("banner-msg").appendChild(s);
+    }
+    rinviaAzione = azioneRinvia || null;
+    $("banner-rinvia").style.display = azioneRinvia ? "" : "none";
+    $("banner-allarme").classList.add("visibile");
+    avviaSuono();
+    notifica(titolo, sotto || "");
+  }
+  function chiudiBanner() {
+    $("banner-allarme").classList.remove("visibile");
+    fermaSuono();
+    rinviaAzione = null;
+  }
+  $("banner-stop").addEventListener("click", chiudiBanner);
+  $("banner-rinvia").addEventListener("click", function () {
+    if (rinviaAzione) rinviaAzione();
+    chiudiBanner();
+  });
+
+  /* ---------- Orologio ---------- */
+  var giorniSett = ["domenica","lunedì","martedì","mercoledì","giovedì","venerdì","sabato"];
+  var mesi = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+
+  // Quadrante da stazione disegnato via JS
+  (function costruisciQuadrante() {
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = $("quadrante");
+    function el(nome, attr) {
+      var e = document.createElementNS(NS, nome);
+      for (var k in attr) e.setAttribute(k, attr[k]);
+      svg.appendChild(e); return e;
+    }
+    el("circle", { cx: 100, cy: 100, r: 96, fill: "var(--surface)", stroke: "var(--line)", "stroke-width": 2 });
+    for (var i = 0; i < 60; i++) {
+      var a = i * 6 * Math.PI / 180;
+      var maggiore = i % 5 === 0;
+      var r1 = maggiore ? 78 : 86, r2 = 92;
+      el("line", {
+        x1: 100 + r1 * Math.sin(a), y1: 100 - r1 * Math.cos(a),
+        x2: 100 + r2 * Math.sin(a), y2: 100 - r2 * Math.cos(a),
+        stroke: "var(--ink)", "stroke-width": maggiore ? 5 : 1.6,
+        "stroke-linecap": "butt", opacity: maggiore ? 1 : 0.6
+      });
+    }
+    el("line", { id: "l-ore",  x1: 100, y1: 100, x2: 100, y2: 52, stroke: "var(--ink)", "stroke-width": 7, "stroke-linecap": "round" });
+    el("line", { id: "l-min",  x1: 100, y1: 100, x2: 100, y2: 26, stroke: "var(--ink)", "stroke-width": 5, "stroke-linecap": "round" });
+    var gs = el("g", { id: "g-sec" });
+    var lsec = document.createElementNS(NS, "line");
+    lsec.setAttribute("x1", 100); lsec.setAttribute("y1", 112);
+    lsec.setAttribute("x2", 100); lsec.setAttribute("y2", 40);
+    lsec.setAttribute("stroke", "var(--accent)"); lsec.setAttribute("stroke-width", 2.5);
+    gs.appendChild(lsec);
+    var pall = document.createElementNS(NS, "circle");
+    pall.setAttribute("cx", 100); pall.setAttribute("cy", 40); pall.setAttribute("r", 7);
+    pall.setAttribute("fill", "var(--accent)");
+    gs.appendChild(pall);
+    el("circle", { cx: 100, cy: 100, r: 4, fill: "var(--ink)" });
+  })();
+
+  function aggiornaOrologio() {
+    var d = new Date();
+    var hh = due(d.getHours()), mm = due(d.getMinutes()), ss = due(d.getSeconds());
+    $("mini-orologio").textContent = hh + ":" + mm + ":" + ss;
+    $("ora-grande").textContent = hh + ":" + mm + ":" + ss;
+    $("data-oggi").innerHTML = "";
+    var b = document.createElement("b");
+    b.textContent = giorniSett[d.getDay()] + " " + d.getDate() + " " + mesi[d.getMonth()] + " " + d.getFullYear();
+    $("data-oggi").appendChild(b);
+    // Angoli sempre crescenti nel giorno: così lo scatto animato
+    // della lancetta non torna mai indietro al cambio di minuto/ora.
+    var secGiorno = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+    var rotSec = secGiorno * 6;
+    var rotMin = secGiorno / 10;
+    var rotOre = secGiorno / 120;
+    var lo = document.getElementById("l-ore"), lm = document.getElementById("l-min"), gsec = document.getElementById("g-sec");
+    if (lo) lo.setAttribute("transform", "rotate(" + rotOre + " 100 100)");
+    if (lm) lm.setAttribute("transform", "rotate(" + rotMin + " 100 100)");
+    if (gsec) gsec.setAttribute("transform", "rotate(" + rotSec + " 100 100)");
+  }
+
+  /* ---------- Cronometro ---------- */
+  var cronoInizio = 0, cronoAccumulato = 0, cronoTimer = null, giri = [];
+  function cronoMs() { return cronoAccumulato + (cronoTimer ? Date.now() - cronoInizio : 0); }
+  function formatoCrono(ms) {
+    var cs = Math.floor(ms / 10) % 100;
+    var s = Math.floor(ms / 1000) % 60;
+    var m = Math.floor(ms / 60000);
+    return due(m) + ":" + due(s) + '<span class="cs">,' + due(cs) + "</span>";
+  }
+  function disegnaCrono() { $("crono-lettura").innerHTML = formatoCrono(cronoMs()); }
+  $("crono-avvia").addEventListener("click", function () {
+    if (cronoTimer) {
+      cronoAccumulato += Date.now() - cronoInizio;
+      clearInterval(cronoTimer); cronoTimer = null;
+      this.textContent = "Riprendi"; this.classList.remove("primario");
+      $("crono-giro").disabled = true;
+    } else {
+      cronoInizio = Date.now();
+      cronoTimer = setInterval(disegnaCrono, 33);
+      this.textContent = "Pausa"; this.classList.add("primario");
+      $("crono-giro").disabled = false;
+      $("crono-azzera").disabled = false;
+    }
+  });
+  $("crono-giro").addEventListener("click", function () {
+    giri.unshift(cronoMs());
+    var ol = $("lista-giri"); ol.innerHTML = "";
+    giri.forEach(function (ms, i) {
+      var li = document.createElement("li");
+      var n = document.createElement("span"); n.textContent = "Giro " + (giri.length - i);
+      var v = document.createElement("span"); v.innerHTML = formatoCrono(ms);
+      li.appendChild(n); li.appendChild(v); ol.appendChild(li);
+    });
+  });
+  $("crono-azzera").addEventListener("click", function () {
+    clearInterval(cronoTimer); cronoTimer = null;
+    cronoAccumulato = 0; giri = [];
+    $("lista-giri").innerHTML = "";
+    disegnaCrono();
+    $("crono-avvia").textContent = "Avvia"; $("crono-avvia").classList.add("primario");
+    $("crono-giro").disabled = true; $("crono-azzera").disabled = true;
+  });
+
+  /* ---------- Timer ---------- */
+  var timerFine = 0, timerTotale = 0, timerTick = null;
+  function formatoTimer(sec) {
+    sec = Math.max(0, Math.round(sec));
+    var h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, s = sec % 60;
+    return h > 0 ? due(h) + ":" + due(m) + ":" + due(s) : due(m) + ":" + due(s);
+  }
+  function leggiImpostazione() {
+    var m = parseInt($("timer-min").value, 10) || 0;
+    var s = parseInt($("timer-sec").value, 10) || 0;
+    return Math.min(m, 999) * 60 + Math.min(s, 59);
+  }
+  function mostraImpostazione() {
+    if (!timerTick) $("timer-lettura").textContent = formatoTimer(leggiImpostazione());
+  }
+  $("timer-min").addEventListener("input", mostraImpostazione);
+  $("timer-sec").addEventListener("input", mostraImpostazione);
+  document.querySelectorAll(".preset .chip").forEach(function (c) {
+    c.addEventListener("click", function () {
+      $("timer-min").value = c.dataset.min; $("timer-sec").value = 0;
+      mostraImpostazione();
+    });
+  });
+  function fermaTimer(azzeraDisplay) {
+    clearInterval(timerTick); timerTick = null;
+    $("timer-avvia").textContent = "Avvia";
+    $("timer-avvia").classList.add("primario");
+    if (azzeraDisplay) {
+      $("timer-barra").style.width = "0%";
+      $("timer-lettura").classList.remove("allarme");
+      mostraImpostazione();
+      $("timer-azzera").disabled = true;
+    }
+  }
+  $("timer-avvia").addEventListener("click", function () {
+    if (timerTick) { // pausa
+      timerTotale = Math.max(0, (timerFine - Date.now()) / 1000); // riusa come "restante"
+      clearInterval(timerTick); timerTick = null;
+      this.textContent = "Riprendi";
+      this.dataset.pausa = "1";
+      this.dataset.restante = String(timerTotale);
+      return;
+    }
+    var durata;
+    if (this.dataset.pausa === "1") {
+      durata = parseFloat(this.dataset.restante) || 0;
+      delete this.dataset.pausa; delete this.dataset.restante;
+    } else {
+      durata = leggiImpostazione();
+      timerTotale = durata;
+    }
+    if (durata <= 0) return;
+    if (!timerTotale) timerTotale = durata;
+    timerFine = Date.now() + durata * 1000;
+    $("timer-azzera").disabled = false;
+    $("timer-lettura").classList.remove("allarme");
+    this.textContent = "Pausa";
+    chiediNotifiche();
+    timerTick = setInterval(function () {
+      var resta = (timerFine - Date.now()) / 1000;
+      if (resta <= 0) {
+        fermaTimer(false);
+        $("timer-lettura").textContent = "00:00";
+        $("timer-lettura").classList.add("allarme");
+        $("timer-barra").style.width = "100%";
+        mostraBanner("Tempo scaduto!", "Il timer da " + formatoTimer(timerTotale) + " è finito.");
+        return;
+      }
+      $("timer-lettura").textContent = formatoTimer(Math.ceil(resta));
+      var perc = timerTotale > 0 ? (1 - resta / timerTotale) * 100 : 0;
+      $("timer-barra").style.width = Math.min(100, Math.max(0, perc)) + "%";
+    }, 200);
+  });
+  $("timer-azzera").addEventListener("click", function () {
+    delete $("timer-avvia").dataset.pausa; delete $("timer-avvia").dataset.restante;
+    timerTotale = 0;
+    fermaTimer(true);
+  });
+
+  /* ---------- Archivio locale ---------- */
+  function carica(chiave, fallback) {
+    try {
+      var v = JSON.parse(localStorage.getItem(chiave));
+      return Array.isArray(v) ? v : fallback;
+    } catch (e) { return fallback; }
+  }
+  function salva(chiave, val) {
+    try { localStorage.setItem(chiave, JSON.stringify(val)); } catch (e) {}
+  }
+
+  /* ---------- Sveglie ---------- */
+  var sveglie = carica("tempo.sveglie", []);
+  function salvaSveglie() { salva("tempo.sveglie", sveglie); }
+  function disegnaSveglie() {
+    var ul = $("lista-sveglie"); ul.innerHTML = "";
+    $("sveglie-vuoto").style.display = sveglie.length ? "none" : "";
+    sveglie.slice().sort(function (a, b) { return a.ora < b.ora ? -1 : 1; }).forEach(function (s, indice) {
+      var li = document.createElement("li");
+      li.style.animationDelay = Math.min(indice * 40, 320) + "ms";
+      if (!s.attiva) li.classList.add("spenta");
+
+      var ora = document.createElement("div"); ora.className = "ora"; ora.textContent = s.ora;
+      var info = document.createElement("div"); info.className = "info";
+      var tit = document.createElement("div"); tit.className = "titolo";
+      tit.textContent = s.nome || "Sveglia";
+      info.appendChild(tit);
+
+      var sw = document.createElement("label"); sw.className = "switch";
+      var inp = document.createElement("input");
+      inp.type = "checkbox"; inp.checked = !!s.attiva;
+      inp.setAttribute("aria-label", "Attiva sveglia " + s.ora);
+      inp.addEventListener("change", function () {
+        s.attiva = inp.checked; s.ultimoScatto = "";
+        salvaSveglie(); disegnaSveglie();
+      });
+      var slitta = document.createElement("span"); slitta.className = "slitta";
+      sw.appendChild(inp); sw.appendChild(slitta);
+
+      var del = document.createElement("button");
+      del.className = "btn-x"; del.textContent = "✕";
+      del.setAttribute("aria-label", "Elimina sveglia " + s.ora);
+      del.addEventListener("click", function () {
+        sveglie = sveglie.filter(function (x) { return x.id !== s.id; });
+        salvaSveglie(); disegnaSveglie();
+      });
+
+      li.appendChild(ora); li.appendChild(info); li.appendChild(sw); li.appendChild(del);
+      ul.appendChild(li);
+    });
+  }
+  $("sveglia-aggiungi").addEventListener("click", function () {
+    var ora = $("sveglia-ora").value;
+    if (!ora) return;
+    sveglie.push({
+      id: Date.now() + "" + Math.floor(Math.random() * 1000),
+      ora: ora,
+      nome: $("sveglia-nome").value.trim(),
+      attiva: true,
+      ultimoScatto: ""
+    });
+    $("sveglia-nome").value = "";
+    salvaSveglie(); disegnaSveglie(); chiediNotifiche();
+  });
+  function controllaSveglie() {
+    var d = new Date();
+    var adesso = due(d.getHours()) + ":" + due(d.getMinutes());
+    var oggiMin = d.toDateString() + " " + adesso;
+    sveglie.forEach(function (s) {
+      if (s.attiva && s.ora === adesso && s.ultimoScatto !== oggiMin) {
+        s.ultimoScatto = oggiMin;
+        salvaSveglie();
+        mostraBanner((s.nome || "Sveglia") + " — " + s.ora, "È l'ora che avevi impostato.", function () {
+          var dt = new Date(Date.now() + 5 * 60000);
+          s.ora = due(dt.getHours()) + ":" + due(dt.getMinutes());
+          s.ultimoScatto = "";
+          salvaSveglie(); disegnaSveglie();
+        });
+      }
+    });
+  }
+
+  /* ---------- Promemoria ---------- */
+  var promemoria = carica("tempo.promemoria", []);
+  function salvaPromo() { salva("tempo.promemoria", promemoria); }
+  function formattaQuando(iso) {
+    var d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return giorniSett[d.getDay()] + " " + d.getDate() + " " + mesi[d.getMonth()] +
+      " " + d.getFullYear() + ", ore " + due(d.getHours()) + ":" + due(d.getMinutes());
+  }
+  function disegnaPromo() {
+    var ul = $("lista-promemoria"); ul.innerHTML = "";
+    $("promo-vuoto").style.display = promemoria.length ? "none" : "";
+    promemoria.slice().sort(function (a, b) { return a.quando < b.quando ? -1 : 1; }).forEach(function (p, indice) {
+      var li = document.createElement("li");
+      li.style.animationDelay = Math.min(indice * 40, 320) + "ms";
+      if (p.fatto) li.classList.add("fatto");
+
+      var chk = document.createElement("input");
+      chk.type = "checkbox"; chk.className = "check"; chk.checked = !!p.fatto;
+      chk.setAttribute("aria-label", "Segna come fatto: " + p.testo);
+      chk.addEventListener("change", function () {
+        p.fatto = chk.checked; salvaPromo(); disegnaPromo(); disegnaCalendario();
+      });
+
+      var info = document.createElement("div"); info.className = "info";
+      var tit = document.createElement("div"); tit.className = "titolo"; tit.textContent = p.testo;
+      var qnd = document.createElement("div"); qnd.className = "quando"; qnd.textContent = formattaQuando(p.quando);
+      info.appendChild(tit); info.appendChild(qnd);
+
+      var del = document.createElement("button");
+      del.className = "btn-x"; del.textContent = "✕";
+      del.setAttribute("aria-label", "Elimina promemoria: " + p.testo);
+      del.addEventListener("click", function () {
+        promemoria = promemoria.filter(function (x) { return x.id !== p.id; });
+        salvaPromo(); disegnaPromo(); disegnaCalendario();
+      });
+
+      li.appendChild(chk); li.appendChild(info); li.appendChild(del);
+      ul.appendChild(li);
+    });
+  }
+  $("promo-aggiungi").addEventListener("click", function () {
+    var testo = $("promo-testo").value.trim();
+    var quando = $("promo-quando").value;
+    if (!testo || !quando) return;
+    promemoria.push({
+      id: Date.now() + "" + Math.floor(Math.random() * 1000),
+      testo: testo, quando: quando, fatto: false, avvisato: false
+    });
+    $("promo-testo").value = "";
+    salvaPromo(); disegnaPromo(); disegnaCalendario(); chiediNotifiche();
+  });
+  function controllaPromemoria() {
+    var adesso = Date.now();
+    promemoria.forEach(function (p) {
+      if (!p.fatto && !p.avvisato) {
+        var t = new Date(p.quando).getTime();
+        if (!isNaN(t) && t <= adesso && adesso - t < 12 * 3600000) {
+          p.avvisato = true; salvaPromo();
+          mostraBanner("Promemoria: " + p.testo, formattaQuando(p.quando));
+        }
+      }
+    });
+  }
+  // valore predefinito del campo "quando": tra un'ora
+  (function () {
+    var d = new Date(Date.now() + 3600000);
+    $("promo-quando").value = d.getFullYear() + "-" + due(d.getMonth() + 1) + "-" + due(d.getDate()) +
+      "T" + due(d.getHours()) + ":" + due(d.getMinutes());
+  })();
+
+  /* ---------- Calendario ---------- */
+  var calAnno, calMese, giornoScelto = null;
+  (function () { var d = new Date(); calAnno = d.getFullYear(); calMese = d.getMonth(); })();
+  var nomiGiorniBrevi = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+
+  function chiaveGiorno(a, m, g) { return a + "-" + due(m + 1) + "-" + due(g); }
+  function promoDelGiorno(chiave) {
+    return promemoria.filter(function (p) { return (p.quando || "").slice(0, 10) === chiave; });
+  }
+  function disegnaCalendario() {
+    var griglia = $("griglia-cal"); griglia.innerHTML = "";
+    $("cal-titolo").textContent = mesi[calMese] + " " + calAnno;
+    nomiGiorniBrevi.forEach(function (n) {
+      var e = document.createElement("div"); e.className = "nome-g"; e.textContent = n;
+      griglia.appendChild(e);
+    });
+    var primo = new Date(calAnno, calMese, 1);
+    var slittamento = (primo.getDay() + 6) % 7; // settimana che parte da lunedì
+    var nelMese = new Date(calAnno, calMese + 1, 0).getDate();
+    var oggi = new Date();
+    var totale = Math.ceil((slittamento + nelMese) / 7) * 7;
+    for (var i = 0; i < totale; i++) {
+      var data = new Date(calAnno, calMese, i - slittamento + 1);
+      var b = document.createElement("button");
+      b.className = "giorno"; b.type = "button";
+      b.textContent = data.getDate();
+      var chiave = chiaveGiorno(data.getFullYear(), data.getMonth(), data.getDate());
+      if (data.getMonth() !== calMese) b.classList.add("altro-mese");
+      if (data.toDateString() === oggi.toDateString()) b.classList.add("oggi");
+      if (chiave === giornoScelto) b.classList.add("selezionato");
+      if (promoDelGiorno(chiave).some(function (p) { return !p.fatto; })) {
+        var pt = document.createElement("span"); pt.className = "puntino";
+        b.appendChild(pt);
+      }
+      b.setAttribute("aria-label", data.getDate() + " " + mesi[data.getMonth()] + " " + data.getFullYear());
+      (function (k) {
+        b.addEventListener("click", function () {
+          giornoScelto = (giornoScelto === k) ? null : k;
+          disegnaCalendario();
+        });
+      })(chiave);
+      griglia.appendChild(b);
+    }
+    // dettaglio del giorno scelto
+    var det = $("dettaglio-giorno"); det.innerHTML = "";
+    if (giornoScelto) {
+      var parti = giornoScelto.split("-");
+      var dd = new Date(+parti[0], +parti[1] - 1, +parti[2]);
+      var h4 = document.createElement("h4");
+      h4.textContent = giorniSett[dd.getDay()] + " " + dd.getDate() + " " + mesi[dd.getMonth()];
+      det.appendChild(h4);
+      var lista = promoDelGiorno(giornoScelto);
+      if (!lista.length) {
+        var v = document.createElement("div"); v.className = "vuoto";
+        v.style.borderTop = "none"; v.style.padding = "0 0 4px";
+        v.textContent = "Nessun promemoria per questo giorno.";
+        det.appendChild(v);
+      } else {
+        var ul = document.createElement("ul"); ul.className = "elenco";
+        lista.sort(function (a, b) { return a.quando < b.quando ? -1 : 1; }).forEach(function (p) {
+          var li = document.createElement("li");
+          if (p.fatto) li.classList.add("fatto");
+          var ora = document.createElement("div"); ora.className = "ora";
+          ora.style.fontSize = "18px"; ora.style.minWidth = "56px";
+          ora.textContent = (p.quando || "").slice(11, 16);
+          var info = document.createElement("div"); info.className = "info";
+          var tt = document.createElement("div"); tt.className = "titolo"; tt.textContent = p.testo;
+          info.appendChild(tt);
+          li.appendChild(ora); li.appendChild(info);
+          ul.appendChild(li);
+        });
+        det.appendChild(ul);
+      }
+    }
+  }
+  $("cal-prec").addEventListener("click", function () {
+    calMese--; if (calMese < 0) { calMese = 11; calAnno--; }
+    disegnaCalendario();
+  });
+  $("cal-succ").addEventListener("click", function () {
+    calMese++; if (calMese > 11) { calMese = 0; calAnno++; }
+    disegnaCalendario();
+  });
+  $("cal-oggi-btn").addEventListener("click", function () {
+    var d = new Date(); calAnno = d.getFullYear(); calMese = d.getMonth();
+    giornoScelto = chiaveGiorno(calAnno, calMese, d.getDate());
+    disegnaCalendario();
+  });
+
+  /* ---------- Battito principale ---------- */
+  aggiornaOrologio();
+  disegnaSveglie();
+  disegnaPromo();
+  disegnaCalendario();
+  disegnaCrono();
+  mostraImpostazione();
+  setInterval(function () {
+    aggiornaOrologio();
+    controllaSveglie();
+    controllaPromemoria();
+  }, 1000);
+})();
+</script>
+
+</html>
