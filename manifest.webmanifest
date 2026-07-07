@@ -1,0 +1,16 @@
+{
+  "name": "Tempo — i tuoi strumenti del tempo",
+  "short_name": "Tempo",
+  "description": "Orologio, cronometro, timer, sveglia, promemoria e calendario in una sola app.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#0F172A",
+  "icons": [
+    { "src": "icona-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icona-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,5 +1,19 @@
 <!DOCTYPE html>
 <html lang="it">
+<meta name="description" content="Orologio, cronometro, timer, sveglia, promemoria e calendario in una sola pagina, tutto in italiano.">
+<meta name="theme-color" content="#F1EEE6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F172A" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tempo">
+<link rel="icon" href="icona.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<script>
+  if ("serviceWorker" in navigator) {
+    addEventListener("load", function () { navigator.serviceWorker.register("sw.js"); });
+  }
+</script>
 <meta charset="utf-8">
 <title>Tempo — cronometro, sveglia e calendario</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -334,6 +348,11 @@
   .elenco .info { flex: 1; min-width: 0; }
   .elenco .info .titolo { font-weight: 600; overflow-wrap: anywhere; }
   .elenco .info .quando { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .elenco .info .quando.ritardo { color: #B3261E; font-weight: 650; }
+  @media (prefers-color-scheme: dark) { .elenco .info .quando.ritardo { color: #FFB4AB; } }
+  :root[data-theme="dark"] .elenco .info .quando.ritardo { color: #FFB4AB; }
+  :root[data-theme="light"] .elenco .info .quando.ritardo { color: #B3261E; }
+  #lista-giri .delta { color: var(--muted); font-size: 13px; }
   .elenco li.fatto .titolo { text-decoration: line-through; color: var(--muted); }
   .elenco li.spenta .ora { color: var(--muted); }
   .vuoto { color: var(--muted); font-size: 14.5px; padding: 14px 4px 2px; border-top: 1px solid var(--line); margin-top: 16px; }
@@ -595,6 +614,28 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var due = function (n) { return String(n).padStart(2, "0"); };
+  var TITOLO_BASE = document.title;
+
+  /* ---------- Schermo acceso durante cronometro/timer ---------- */
+  var bloccoSchermo = null;
+  function tieniSchermoAcceso() {
+    if (!("wakeLock" in navigator)) return;
+    navigator.wakeLock.request("screen")
+      .then(function (b) { bloccoSchermo = b; })
+      .catch(function () {});
+  }
+  function aggiornaBloccoSchermo() {
+    if (cronoTimer || timerTick) {
+      if (!bloccoSchermo) tieniSchermoAcceso();
+    } else if (bloccoSchermo) {
+      bloccoSchermo.release().catch(function () {});
+      bloccoSchermo = null;
+    }
+  }
+  document.addEventListener("visibilitychange", function () {
+    bloccoSchermo = null; // il blocco decade quando la pagina va in secondo piano
+    if (document.visibilityState === "visible") aggiornaBloccoSchermo();
+  });
 
   /* ---------- Navigazione a schede ---------- */
   var tabs = document.querySelectorAll("nav.tabs [role=tab]");
@@ -676,6 +717,7 @@
     $("banner-allarme").classList.remove("visibile");
     fermaSuono();
     rinviaAzione = null;
+    document.title = TITOLO_BASE;
   }
   $("banner-stop").addEventListener("click", chiudiBanner);
   $("banner-rinvia").addEventListener("click", function () {
@@ -857,6 +899,7 @@
       $("crono-giro").disabled = false;
       $("crono-azzera").disabled = false;
     }
+    aggiornaBloccoSchermo();
   });
   $("crono-giro").addEventListener("click", function () {
     giri.unshift(cronoMs());
@@ -864,8 +907,14 @@
     giri.forEach(function (ms, i) {
       var li = document.createElement("li");
       var n = document.createElement("span"); n.textContent = "Giro " + (giri.length - i);
+      li.appendChild(n);
+      if (i < giri.length - 1) { // differenza rispetto al giro precedente
+        var de = document.createElement("span"); de.className = "delta";
+        de.innerHTML = "+" + formatoCrono(ms - giri[i + 1]);
+        li.appendChild(de);
+      }
       var v = document.createElement("span"); v.innerHTML = formatoCrono(ms);
-      li.appendChild(n); li.appendChild(v); ol.appendChild(li);
+      li.appendChild(v); ol.appendChild(li);
     });
   });
   $("crono-azzera").addEventListener("click", function () {
@@ -875,6 +924,7 @@
     disegnaCrono();
     $("crono-avvia").textContent = "Avvia"; $("crono-avvia").classList.add("primario");
     $("crono-giro").disabled = true; $("crono-azzera").disabled = true;
+    aggiornaBloccoSchermo();
   });
 
   /* ---------- Timer ---------- */
@@ -909,7 +959,9 @@
       $("timer-lettura").classList.remove("allarme");
       mostraImpostazione();
       $("timer-azzera").disabled = true;
+      document.title = TITOLO_BASE;
     }
+    aggiornaBloccoSchermo();
   }
   $("timer-avvia").addEventListener("click", function () {
     if (timerTick) { // pausa
@@ -918,6 +970,7 @@
       this.textContent = "Riprendi";
       this.dataset.pausa = "1";
       this.dataset.restante = String(timerTotale);
+      aggiornaBloccoSchermo();
       return;
     }
     var durata;
@@ -935,20 +988,24 @@
     $("timer-lettura").classList.remove("allarme");
     this.textContent = "Pausa";
     chiediNotifiche();
-    timerTick = setInterval(function () {
+    timerTick = setInterval(tickTimer, 200);
+    aggiornaBloccoSchermo();
+    function tickTimer() {
       var resta = (timerFine - Date.now()) / 1000;
       if (resta <= 0) {
         fermaTimer(false);
         $("timer-lettura").textContent = "00:00";
         $("timer-lettura").classList.add("allarme");
         $("timer-barra").style.width = "100%";
+        document.title = "Tempo scaduto!";
         mostraBanner("Tempo scaduto!", "Il timer da " + formatoTimer(timerTotale) + " è finito.");
         return;
       }
       $("timer-lettura").textContent = formatoTimer(Math.ceil(resta));
+      document.title = formatoTimer(Math.ceil(resta)) + " · Tempo";
       var perc = timerTotale > 0 ? (1 - resta / timerTotale) * 100 : 0;
       $("timer-barra").style.width = Math.min(100, Math.max(0, perc)) + "%";
-    }, 200);
+    }
   });
   $("timer-azzera").addEventListener("click", function () {
     delete $("timer-avvia").dataset.pausa; delete $("timer-avvia").dataset.restante;
@@ -1020,6 +1077,11 @@
     $("sveglia-nome").value = "";
     salvaSveglie(); disegnaSveglie(); chiediNotifiche();
   });
+  ["sveglia-ora", "sveglia-nome"].forEach(function (id) {
+    $(id).addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") $("sveglia-aggiungi").click();
+    });
+  });
   function controllaSveglie() {
     var d = new Date();
     var adesso = due(d.getHours()) + ":" + due(d.getMinutes());
@@ -1065,6 +1127,10 @@
       var info = document.createElement("div"); info.className = "info";
       var tit = document.createElement("div"); tit.className = "titolo"; tit.textContent = p.testo;
       var qnd = document.createElement("div"); qnd.className = "quando"; qnd.textContent = formattaQuando(p.quando);
+      if (!p.fatto && new Date(p.quando).getTime() < Date.now()) {
+        qnd.classList.add("ritardo");
+        qnd.textContent += " · in ritardo";
+      }
       info.appendChild(tit); info.appendChild(qnd);
 
       var del = document.createElement("button");
@@ -1089,6 +1155,11 @@
     });
     $("promo-testo").value = "";
     salvaPromo(); disegnaPromo(); disegnaCalendario(); chiediNotifiche();
+  });
+  ["promo-testo", "promo-quando"].forEach(function (id) {
+    $(id).addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") $("promo-aggiungi").click();
+    });
   });
   function controllaPromemoria() {
     var adesso = Date.now();
