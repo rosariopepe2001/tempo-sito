@@ -677,8 +677,10 @@
       if (!ctxAudio) ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
       if (ctxAudio.state === "suspended") ctxAudio.resume();
       var trillo = function () {
-        var t = ctxAudio.currentTime;
-        beep(880, t, 0.18); beep(660, t + 0.25, 0.18); beep(880, t + 0.5, 0.18);
+        try {
+          var t = ctxAudio.currentTime;
+          beep(880, t, 0.18); beep(660, t + 0.25, 0.18); beep(880, t + 0.5, 0.18);
+        } catch (e) { /* audio bloccato: resta l'avviso visivo */ }
       };
       trillo();
       if (suonoInterval) clearInterval(suonoInterval);
@@ -816,7 +818,7 @@
   function oraNelFuso(tz) {
     if (!formatoriFuso[tz]) {
       formatoriFuso[tz] = new Intl.DateTimeFormat("it-IT", {
-        hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz
       });
     }
     return formatoriFuso[tz].format(new Date());
@@ -977,12 +979,13 @@
     aggiornaBloccoSchermo();
   }
   $("timer-avvia").addEventListener("click", function () {
-    if (timerTick) { // pausa
-      timerTotale = Math.max(0, (timerFine - Date.now()) / 1000); // riusa come "restante"
+    if (timerTick) { // pausa: non toccare timerTotale, serve alla barra di avanzamento
+      var restante = Math.max(0, (timerFine - Date.now()) / 1000);
       clearInterval(timerTick); timerTick = null;
       this.textContent = "Riprendi";
       this.dataset.pausa = "1";
-      this.dataset.restante = String(timerTotale);
+      this.dataset.restante = String(restante);
+      document.title = "In pausa · Tempo";
       aggiornaBloccoSchermo();
       return;
     }
@@ -1059,7 +1062,10 @@
       inp.type = "checkbox"; inp.checked = !!s.attiva;
       inp.setAttribute("aria-label", "Attiva sveglia " + s.ora);
       inp.addEventListener("change", function () {
-        s.attiva = inp.checked; s.ultimoScatto = "";
+        s.attiva = inp.checked;
+        // riaccesa con orario appena passato: non squillare subito, varrà da domani
+        s.ultimoScatto = (inp.checked && minutiDallOra(s) >= 0 && minutiDallOra(s) <= 10)
+          ? chiaveScatto(s) : "";
         salvaSveglie(); disegnaSveglie();
       });
       var slitta = document.createElement("span"); slitta.className = "slitta";
@@ -1080,13 +1086,18 @@
   $("sveglia-aggiungi").addEventListener("click", function () {
     var ora = $("sveglia-ora").value;
     if (!ora) return;
-    sveglie.push({
+    var nuova = {
       id: Date.now() + "" + Math.floor(Math.random() * 1000),
       ora: ora,
       nome: $("sveglia-nome").value.trim(),
       attiva: true,
       ultimoScatto: ""
-    });
+    };
+    // se l'orario è appena passato, non farla squillare subito: varrà da domani
+    if (minutiDallOra(nuova) >= 0 && minutiDallOra(nuova) <= 10) {
+      nuova.ultimoScatto = chiaveScatto(nuova);
+    }
+    sveglie.push(nuova);
     $("sveglia-nome").value = "";
     salvaSveglie(); disegnaSveglie(); chiediNotifiche();
   });
@@ -1095,13 +1106,21 @@
       if (ev.key === "Enter") $("sveglia-aggiungi").click();
     });
   });
-  function controllaSveglie() {
+  // Chiave univoca "giorno + ora della sveglia": evita doppi squilli lo stesso giorno
+  function chiaveScatto(s) { return new Date().toDateString() + " " + s.ora; }
+  // Minuti passati dall'orario della sveglia (negativo se deve ancora arrivare)
+  function minutiDallOra(s) {
     var d = new Date();
-    var adesso = due(d.getHours()) + ":" + due(d.getMinutes());
-    var oggiMin = d.toDateString() + " " + adesso;
+    var parti = s.ora.split(":");
+    return d.getHours() * 60 + d.getMinutes() - ((+parti[0]) * 60 + (+parti[1]));
+  }
+  function controllaSveglie() {
     sveglie.forEach(function (s) {
-      if (s.attiva && s.ora === adesso && s.ultimoScatto !== oggiMin) {
-        s.ultimoScatto = oggiMin;
+      // suona anche con qualche minuto di ritardo: su iPhone la pagina
+      // può restare "congelata" proprio al minuto esatto della sveglia
+      var ritardo = minutiDallOra(s);
+      if (s.attiva && ritardo >= 0 && ritardo <= 10 && s.ultimoScatto !== chiaveScatto(s)) {
+        s.ultimoScatto = chiaveScatto(s);
         salvaSveglie();
         mostraBanner((s.nome || "Sveglia") + " — " + s.ora, "È l'ora che avevi impostato.", function () {
           var dt = new Date(Date.now() + 5 * 60000);
