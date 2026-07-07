@@ -4,42 +4,49 @@
 <title>Tempo — cronometro, sveglia e calendario</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+  /* Palette "ambra del tempo + indigo notte" */
   :root {
-    --bg: #F5F4F0;
+    --bg: #F1EEE6;
     --surface: #FFFFFF;
-    --ink: #17191E;
-    --muted: #6A6E78;
-    --line: #E3E2DB;
-    --accent: #C93327;
-    --accent-soft: #C9332715;
+    --ink: #221F18;
+    --muted: #6E6A5E;
+    --line: #E2DED1;
+    --accent: #B45309;
+    --accent-soft: #B4530918;
+    --accent2: #5B5BD6;
+    --on-accent: #FFFFFF;
     --good: #2E7D4F;
-    --shadow: 0 1px 2px rgba(23,25,30,.05), 0 4px 16px rgba(23,25,30,.05);
+    --shadow: 0 1px 2px rgba(34,31,24,.05), 0 8px 30px rgba(34,31,24,.08);
     color-scheme: light dark;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #14161A;
-      --surface: #1C1F25;
-      --ink: #EDECE7;
-      --muted: #9A9EA8;
-      --line: #2B2F37;
-      --accent: #E8564A;
-      --accent-soft: #E8564A22;
+      --bg: #0F172A;
+      --surface: #1E2638;
+      --ink: #EEF0F6;
+      --muted: #97A0B5;
+      --line: #2C3650;
+      --accent: #F5A524;
+      --accent-soft: #F5A52422;
+      --accent2: #818CF8;
+      --on-accent: #231602;
       --good: #5BB98A;
-      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+      --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 40px rgba(0,0,0,.35);
     }
   }
   :root[data-theme="light"] {
-    --bg: #F5F4F0; --surface: #FFFFFF; --ink: #17191E; --muted: #6A6E78;
-    --line: #E3E2DB; --accent: #C93327; --accent-soft: #C9332715;
+    --bg: #F1EEE6; --surface: #FFFFFF; --ink: #221F18; --muted: #6E6A5E;
+    --line: #E2DED1; --accent: #B45309; --accent-soft: #B4530918;
+    --accent2: #5B5BD6; --on-accent: #FFFFFF;
     --good: #2E7D4F;
-    --shadow: 0 1px 2px rgba(23,25,30,.05), 0 4px 16px rgba(23,25,30,.05);
+    --shadow: 0 1px 2px rgba(34,31,24,.05), 0 8px 30px rgba(34,31,24,.08);
   }
   :root[data-theme="dark"] {
-    --bg: #14161A; --surface: #1C1F25; --ink: #EDECE7; --muted: #9A9EA8;
-    --line: #2B2F37; --accent: #E8564A; --accent-soft: #E8564A22;
+    --bg: #0F172A; --surface: #1E2638; --ink: #EEF0F6; --muted: #97A0B5;
+    --line: #2C3650; --accent: #F5A524; --accent-soft: #F5A52422;
+    --accent2: #818CF8; --on-accent: #231602;
     --good: #5BB98A;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 40px rgba(0,0,0,.35);
   }
 
   * { box-sizing: border-box; }
@@ -66,6 +73,49 @@
     20% { transform: translate(-50%, 0) rotate(.6deg); }
     60% { transform: translate(-50%, 0) rotate(-.6deg); }
   }
+  @keyframes deriva-a {
+    from { transform: translate(-8%, -6%) scale(1); }
+    to   { transform: translate(10%, 8%) scale(1.15); }
+  }
+  @keyframes deriva-b {
+    from { transform: translate(6%, 10%) scale(1.1); }
+    to   { transform: translate(-10%, -8%) scale(.95); }
+  }
+  @keyframes deriva-c {
+    from { transform: translate(0, 0) scale(.9); }
+    to   { transform: translate(-6%, 12%) scale(1.2); }
+  }
+
+  /* Sfondo ambientale: aurore ambra e indigo che si muovono piano */
+  .sfondo {
+    position: fixed; inset: 0; z-index: 0;
+    overflow: hidden; pointer-events: none;
+  }
+  .sfondo i {
+    position: absolute; border-radius: 50%;
+    filter: blur(90px); opacity: .45;
+  }
+  .sfondo .b1 {
+    width: 52vmax; height: 52vmax; top: -18vmax; left: -12vmax;
+    background: radial-gradient(circle, #F5A524, transparent 65%);
+    animation: deriva-a 34s ease-in-out infinite alternate;
+  }
+  .sfondo .b2 {
+    width: 46vmax; height: 46vmax; bottom: -16vmax; right: -10vmax;
+    background: radial-gradient(circle, #6366F1, transparent 65%);
+    animation: deriva-b 44s ease-in-out infinite alternate;
+  }
+  .sfondo .b3 {
+    width: 30vmax; height: 30vmax; top: 40%; left: 42%;
+    background: radial-gradient(circle, #EC4899, transparent 65%);
+    opacity: .22;
+    animation: deriva-c 52s ease-in-out infinite alternate;
+  }
+  @media (prefers-color-scheme: dark) { .sfondo i { opacity: .3; } .sfondo .b3 { opacity: .16; } }
+  :root[data-theme="dark"] .sfondo i { opacity: .3; }
+  :root[data-theme="dark"] .sfondo .b3 { opacity: .16; }
+  :root[data-theme="light"] .sfondo i { opacity: .45; }
+  :root[data-theme="light"] .sfondo .b3 { opacity: .22; }
 
   body {
     margin: 0;
@@ -76,7 +126,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .app { max-width: 880px; margin: 0 auto; padding: 20px 16px 64px; }
+  .app { max-width: 880px; margin: 0 auto; padding: 20px 16px 64px; position: relative; z-index: 1; }
 
   header.top {
     display: flex; align-items: baseline; justify-content: space-between;
@@ -85,9 +135,14 @@
   .brand { display: flex; align-items: baseline; gap: 10px; }
   .brand .dot {
     width: 10px; height: 10px; border-radius: 50%;
-    background: var(--accent); align-self: center; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    align-self: center; flex: none;
   }
-  .brand h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .brand h1 {
+    font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
   .brand .sub { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
   #mini-orologio {
     font-variant-numeric: tabular-nums;
@@ -96,17 +151,26 @@
 
   nav.tabs {
     display: flex; gap: 4px; flex-wrap: wrap;
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 14px; padding: 4px; box-shadow: var(--shadow);
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    backdrop-filter: blur(16px) saturate(1.3);
+    border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    border-radius: 16px; padding: 4px; box-shadow: var(--shadow);
     position: sticky; top: 8px; z-index: 5;
   }
   nav.tabs button {
     flex: 1 1 auto; min-width: 90px;
     border: 0; background: transparent; color: var(--muted);
     font: inherit; font-size: 13.5px; font-weight: 600;
-    padding: 9px 10px; border-radius: 10px; cursor: pointer;
+    padding: 9px 10px; border-radius: 12px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     touch-action: manipulation;
     transition: background .18s ease-out, color .18s ease-out, transform .12s ease-out;
+  }
+  nav.tabs button svg {
+    width: 16px; height: 16px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
   }
   nav.tabs button:hover { color: var(--ink); background: var(--accent-soft); }
   nav.tabs button:active { transform: scale(.96); }
@@ -114,7 +178,7 @@
     outline: 2px solid var(--accent); outline-offset: 2px;
   }
   nav.tabs button[aria-selected="true"] {
-    background: var(--accent); color: #fff;
+    background: var(--accent); color: var(--on-accent);
   }
 
   main { padding-top: 22px; }
@@ -125,8 +189,11 @@
   }
 
   .card {
-    background: var(--surface); border: 1px solid var(--line);
-    border-radius: 16px; padding: 22px; box-shadow: var(--shadow);
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    backdrop-filter: blur(16px) saturate(1.3);
+    border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    border-radius: 20px; padding: 22px; box-shadow: var(--shadow);
   }
   .card + .card { margin-top: 16px; }
   .card h2 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
@@ -159,14 +226,21 @@
   }
   .btn:hover { border-color: var(--muted); transform: translateY(-1px); }
   .btn:active { transform: scale(.96); }
-  .btn.primario { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primario { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .btn.primario:hover { filter: brightness(1.08); }
   .btn.piccolo { padding: 7px 14px; font-size: 13.5px; border-radius: 10px; }
   .btn:disabled { opacity: .45; cursor: default; }
 
   /* Orologio analogico */
   .quadrante-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  #quadrante { width: min(280px, 70vw); height: auto; }
+  #quadrante {
+    width: min(280px, 70vw); height: auto;
+    filter: drop-shadow(0 14px 40px color-mix(in srgb, var(--accent) 30%, transparent));
+  }
+  #ora-grande {
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
   #data-oggi { font-size: 15px; color: var(--muted); text-align: center; }
   #data-oggi b { color: var(--ink); font-weight: 650; }
 
@@ -202,7 +276,11 @@
   }
   .campo input[type="number"] { width: 92px; text-align: center; }
   .barra { height: 6px; border-radius: 3px; background: var(--line); margin-top: 18px; overflow: hidden; }
-  .barra > div { height: 100%; width: 0%; background: var(--accent); transition: width .25s linear; }
+  .barra > div {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width .25s linear;
+  }
   /* Lancette con scatto morbido da orologio di stazione */
   #l-ore, #l-min { transition: transform .4s ease-out; }
   #g-sec { transition: transform .3s cubic-bezier(.35, 1.6, .45, 1); }
@@ -295,19 +373,19 @@
   .griglia-cal, #dettaglio-giorno { animation: entrata .25s ease-out both; }
   .giorno.altro-mese { color: var(--muted); opacity: .45; }
   .giorno.oggi { border-color: var(--accent); font-weight: 700; color: var(--accent); }
-  .giorno.selezionato { background: var(--accent); color: #fff; }
+  .giorno.selezionato { background: var(--accent); color: var(--on-accent); }
   .giorno .puntino {
     position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
-    width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+    width: 5px; height: 5px; border-radius: 50%; background: var(--accent2);
   }
-  .giorno.selezionato .puntino { background: #fff; }
+  .giorno.selezionato .puntino { background: var(--on-accent); }
   #dettaglio-giorno { margin-top: 16px; }
   #dettaglio-giorno h4 { margin: 0 0 6px; font-size: 14.5px; text-transform: capitalize; }
 
   /* Banner allarme */
   #banner-allarme {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-    background: var(--accent); color: #fff;
+    background: linear-gradient(135deg, #C2410C, #DC2626); color: #fff;
     border-radius: 16px; padding: 16px 22px;
     display: none; align-items: center; gap: 18px;
     box-shadow: 0 8px 30px rgba(0,0,0,.35);
@@ -321,13 +399,15 @@
   #banner-allarme .msg { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
   #banner-allarme .msg small { display: block; font-weight: 400; opacity: .85; font-size: 13px; }
   #banner-allarme .btn { border-color: rgba(255,255,255,.5); background: transparent; color: #fff; }
-  #banner-allarme .btn.pieno { background: #fff; color: var(--accent); border-color: #fff; }
+  #banner-allarme .btn.pieno { background: #fff; color: #B91C1C; border-color: #fff; }
 
   @media (max-width: 560px) {
     .elenco .ora { font-size: 21px; min-width: 70px; }
     .card { padding: 16px; }
   }
 </style>
+
+<div class="sfondo" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
 
 <div class="app">
   <header class="top">
@@ -340,12 +420,24 @@
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Strumenti">
-    <button role="tab" aria-selected="true"  data-tab="orologio">Orologio</button>
-    <button role="tab" aria-selected="false" data-tab="cronometro">Cronometro</button>
-    <button role="tab" aria-selected="false" data-tab="timer">Timer</button>
-    <button role="tab" aria-selected="false" data-tab="sveglia">Sveglia</button>
-    <button role="tab" aria-selected="false" data-tab="promemoria">Promemoria</button>
-    <button role="tab" aria-selected="false" data-tab="calendario">Calendario</button>
+    <button role="tab" aria-selected="true"  data-tab="orologio">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Orologio</button>
+    <button role="tab" aria-selected="false" data-tab="cronometro">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg>
+      Cronometro</button>
+    <button role="tab" aria-selected="false" data-tab="timer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12M6 22h12M8 2v4l4 4 4-4V2M8 22v-4l4-4 4 4v4"/></svg>
+      Timer</button>
+    <button role="tab" aria-selected="false" data-tab="sveglia">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg>
+      Sveglia</button>
+    <button role="tab" aria-selected="false" data-tab="promemoria">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg>
+      Promemoria</button>
+    <button role="tab" aria-selected="false" data-tab="calendario">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+      Calendario</button>
   </nav>
 
   <main>
