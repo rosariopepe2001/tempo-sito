@@ -244,6 +244,33 @@
   #data-oggi { font-size: 15px; color: var(--muted); text-align: center; }
   #data-oggi b { color: var(--ink); font-weight: 650; }
 
+  /* Orari nel mondo */
+  .mondo {
+    list-style: none; margin: 16px 0 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px;
+  }
+  .mondo li {
+    position: relative; border-radius: 14px; padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+    background: color-mix(in srgb, var(--surface) 45%, transparent);
+    animation: comparsa-riga .25s ease-out both;
+  }
+  .mondo .c-nome {
+    font-size: 13px; font-weight: 650;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mondo .c-nome svg {
+    width: 15px; height: 15px; flex: none;
+    fill: none; stroke: var(--accent); stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .mondo .c-ora {
+    font-variant-numeric: tabular-nums;
+    font-size: 30px; font-weight: 300; line-height: 1.2; margin-top: 2px;
+  }
+  .mondo .c-diff { font-size: 12px; color: var(--muted); }
+  .mondo .btn-x { position: absolute; top: 4px; right: 4px; font-size: 14px; padding: 4px 7px; }
+
   /* Giri cronometro */
   #lista-giri { list-style: none; margin: 18px auto 0; padding: 0; max-width: 380px; }
   #lista-giri li {
@@ -374,11 +401,14 @@
   .giorno.altro-mese { color: var(--muted); opacity: .45; }
   .giorno.oggi { border-color: var(--accent); font-weight: 700; color: var(--accent); }
   .giorno.selezionato { background: var(--accent); color: var(--on-accent); }
-  .giorno .puntino {
-    position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
-    width: 5px; height: 5px; border-radius: 50%; background: var(--accent2);
+  .giorno .puntini {
+    position: absolute; bottom: 6px; left: 0; right: 0;
+    display: flex; gap: 3px; justify-content: center; pointer-events: none;
   }
-  .giorno.selezionato .puntino { background: var(--on-accent); }
+  .giorno .puntini span { width: 5px; height: 5px; border-radius: 50%; }
+  .giorno .puntini .p-evento { background: var(--accent); }
+  .giorno .puntini .p-promo { background: var(--accent2); }
+  .giorno.selezionato .puntini span { background: var(--on-accent); }
   #dettaglio-giorno { margin-top: 16px; }
   #dettaglio-giorno h4 { margin: 0 0 6px; font-size: 14.5px; text-transform: capitalize; }
 
@@ -447,6 +477,16 @@
         <svg id="quadrante" viewBox="0 0 200 200" aria-hidden="true"></svg>
         <div class="lettura" id="ora-grande" style="font-size:clamp(40px,9vw,64px)">--:--:--</div>
         <div id="data-oggi"></div>
+      </div>
+      <div class="card">
+        <h2>Nel mondo</h2>
+        <p class="hint">Che ore sono nelle altre città. Il sole indica il giorno, la luna la notte.</p>
+        <div class="riga-input" style="justify-content:flex-start">
+          <label class="campo"><span class="etichetta">Aggiungi città</span>
+            <select id="citta-scelta"></select></label>
+          <button class="btn" id="citta-aggiungi">Aggiungi</button>
+        </div>
+        <ul class="mondo" id="lista-mondo"></ul>
       </div>
     </section>
 
@@ -703,6 +743,96 @@
     if (lm) lm.setAttribute("transform", "rotate(" + rotMin + " 100 100)");
     if (gsec) gsec.setAttribute("transform", "rotate(" + rotSec + " 100 100)");
   }
+
+  /* ---------- Orari nel mondo ---------- */
+  var FUSI = {
+    "Londra": "Europe/London", "Parigi": "Europe/Paris", "Berlino": "Europe/Berlin",
+    "Madrid": "Europe/Madrid", "Atene": "Europe/Athens", "Mosca": "Europe/Moscow",
+    "New York": "America/New_York", "Los Angeles": "America/Los_Angeles",
+    "Toronto": "America/Toronto", "Città del Messico": "America/Mexico_City",
+    "San Paolo": "America/Sao_Paulo", "Buenos Aires": "America/Argentina/Buenos_Aires",
+    "Il Cairo": "Africa/Cairo", "Nairobi": "Africa/Nairobi",
+    "Dubai": "Asia/Dubai", "Mumbai": "Asia/Kolkata", "Bangkok": "Asia/Bangkok",
+    "Pechino": "Asia/Shanghai", "Tokyo": "Asia/Tokyo", "Seul": "Asia/Seoul",
+    "Sydney": "Australia/Sydney", "Auckland": "Pacific/Auckland", "Honolulu": "Pacific/Honolulu"
+  };
+  var citta = carica("tempo.citta", ["New York", "Londra", "Dubai", "Tokyo"]);
+  var formatoriFuso = {};
+  function oraNelFuso(tz) {
+    if (!formatoriFuso[tz]) {
+      formatoriFuso[tz] = new Intl.DateTimeFormat("it-IT", {
+        hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz
+      });
+    }
+    return formatoriFuso[tz].format(new Date());
+  }
+  function differenzaOre(tz) {
+    var adesso = new Date();
+    var la = new Date(adesso.toLocaleString("en-US", { timeZone: tz }));
+    var qui = new Date(adesso.toLocaleString("en-US"));
+    return Math.round((la - qui) / 3600000 * 2) / 2;
+  }
+  var SOLE = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>';
+  var LUNA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function disegnaMondo() {
+    var ul = $("lista-mondo"); ul.innerHTML = "";
+    citta.forEach(function (nome, indice) {
+      if (!FUSI[nome]) return;
+      var li = document.createElement("li");
+      li.style.animationDelay = Math.min(indice * 40, 320) + "ms";
+
+      var riga = document.createElement("div"); riga.className = "c-nome";
+      var icona = document.createElement("span"); icona.style.display = "inline-flex";
+      var testoNome = document.createElement("span"); testoNome.textContent = nome;
+      riga.appendChild(icona); riga.appendChild(testoNome);
+
+      var ora = document.createElement("div"); ora.className = "c-ora";
+      var diff = document.createElement("div"); diff.className = "c-diff";
+
+      var del = document.createElement("button");
+      del.className = "btn-x"; del.textContent = "✕";
+      del.setAttribute("aria-label", "Togli " + nome);
+      del.addEventListener("click", function () {
+        citta = citta.filter(function (c) { return c !== nome; });
+        salva("tempo.citta", citta);
+        disegnaMondo();
+      });
+
+      li.appendChild(riga); li.appendChild(ora); li.appendChild(diff); li.appendChild(del);
+      li.dataset.citta = nome;
+      ul.appendChild(li);
+    });
+    aggiornaMondo();
+    // riempi il menu con le città non ancora aggiunte
+    var sel = $("citta-scelta"); sel.innerHTML = "";
+    Object.keys(FUSI).sort(function (a, b) { return a.localeCompare(b, "it"); }).forEach(function (nome) {
+      if (citta.indexOf(nome) === -1) {
+        var op = document.createElement("option");
+        op.value = nome; op.textContent = nome;
+        sel.appendChild(op);
+      }
+    });
+  }
+  function aggiornaMondo() {
+    document.querySelectorAll("#lista-mondo li").forEach(function (li) {
+      var nome = li.dataset.citta, tz = FUSI[nome];
+      var testo = oraNelFuso(tz);
+      li.querySelector(".c-ora").textContent = testo;
+      var d = differenzaOre(tz);
+      li.querySelector(".c-diff").textContent =
+        d === 0 ? "stessa ora" : (d > 0 ? "+" : "−") + String(Math.abs(d)).replace(".", ",") + " ore";
+      var oraLocale = parseInt(testo.slice(0, 2), 10);
+      li.querySelector(".c-nome span").innerHTML = (oraLocale >= 7 && oraLocale < 20) ? SOLE : LUNA;
+    });
+  }
+  $("citta-aggiungi").addEventListener("click", function () {
+    var nome = $("citta-scelta").value;
+    if (nome && citta.indexOf(nome) === -1) {
+      citta.push(nome);
+      salva("tempo.citta", citta);
+      disegnaMondo();
+    }
+  });
 
   /* ---------- Cronometro ---------- */
   var cronoInizio = 0, cronoAccumulato = 0, cronoTimer = null, giri = [];
@@ -979,6 +1109,13 @@
       "T" + due(d.getHours()) + ":" + due(d.getMinutes());
   })();
 
+  /* ---------- Eventi del calendario ---------- */
+  var eventi = carica("tempo.eventi", []);
+  function salvaEventi() { salva("tempo.eventi", eventi); }
+  function eventiDelGiorno(chiave) {
+    return eventi.filter(function (e) { return e.data === chiave; });
+  }
+
   /* ---------- Calendario ---------- */
   var calAnno, calMese, giornoScelto = null;
   (function () { var d = new Date(); calAnno = d.getFullYear(); calMese = d.getMonth(); })();
@@ -1009,9 +1146,13 @@
       if (data.getMonth() !== calMese) b.classList.add("altro-mese");
       if (data.toDateString() === oggi.toDateString()) b.classList.add("oggi");
       if (chiave === giornoScelto) b.classList.add("selezionato");
-      if (promoDelGiorno(chiave).some(function (p) { return !p.fatto; })) {
-        var pt = document.createElement("span"); pt.className = "puntino";
-        b.appendChild(pt);
+      var haEventi = eventiDelGiorno(chiave).length > 0;
+      var haPromo = promoDelGiorno(chiave).some(function (p) { return !p.fatto; });
+      if (haEventi || haPromo) {
+        var pp = document.createElement("span"); pp.className = "puntini";
+        if (haEventi) { var pe = document.createElement("span"); pe.className = "p-evento"; pp.appendChild(pe); }
+        if (haPromo) { var pr = document.createElement("span"); pr.className = "p-promo"; pp.appendChild(pr); }
+        b.appendChild(pp);
       }
       b.setAttribute("aria-label", data.getDate() + " " + mesi[data.getMonth()] + " " + data.getFullYear());
       (function (k) {
@@ -1030,15 +1171,78 @@
       var h4 = document.createElement("h4");
       h4.textContent = giorniSett[dd.getDay()] + " " + dd.getDate() + " " + mesi[dd.getMonth()];
       det.appendChild(h4);
-      var lista = promoDelGiorno(giornoScelto);
-      if (!lista.length) {
+
+      // modulo per aggiungere un evento al giorno scelto
+      var form = document.createElement("div");
+      form.className = "riga-input"; form.style.justifyContent = "flex-start";
+      var campoTit = document.createElement("label"); campoTit.className = "campo";
+      campoTit.style.flex = "1"; campoTit.style.minWidth = "160px";
+      var etTit = document.createElement("span"); etTit.className = "etichetta"; etTit.textContent = "Nuovo evento";
+      var inTit = document.createElement("input");
+      inTit.type = "text"; inTit.placeholder = "Es. Compleanno di Marco"; inTit.maxLength = 80;
+      campoTit.appendChild(etTit); campoTit.appendChild(inTit);
+      var campoOra = document.createElement("label"); campoOra.className = "campo";
+      var etOra = document.createElement("span"); etOra.className = "etichetta"; etOra.textContent = "Ora (facoltativa)";
+      var inOra = document.createElement("input"); inOra.type = "time";
+      campoOra.appendChild(etOra); campoOra.appendChild(inOra);
+      var btnAgg = document.createElement("button");
+      btnAgg.className = "btn primario"; btnAgg.textContent = "Aggiungi";
+      function aggiungiEvento() {
+        var titolo = inTit.value.trim();
+        if (!titolo) { inTit.focus(); return; }
+        eventi.push({
+          id: Date.now() + "" + Math.floor(Math.random() * 1000),
+          data: giornoScelto, ora: inOra.value || "", titolo: titolo
+        });
+        salvaEventi(); disegnaCalendario();
+      }
+      btnAgg.addEventListener("click", aggiungiEvento);
+      inTit.addEventListener("keydown", function (ev) { if (ev.key === "Enter") aggiungiEvento(); });
+      form.appendChild(campoTit); form.appendChild(campoOra); form.appendChild(btnAgg);
+      det.appendChild(form);
+
+      var listaEventi = eventiDelGiorno(giornoScelto)
+        .sort(function (a, b) { return (a.ora || "99") < (b.ora || "99") ? -1 : 1; });
+      var listaPromo = promoDelGiorno(giornoScelto)
+        .sort(function (a, b) { return a.quando < b.quando ? -1 : 1; });
+
+      if (!listaEventi.length && !listaPromo.length) {
         var v = document.createElement("div"); v.className = "vuoto";
-        v.style.borderTop = "none"; v.style.padding = "0 0 4px";
-        v.textContent = "Nessun promemoria per questo giorno.";
+        v.style.borderTop = "none"; v.style.padding = "10px 0 4px";
+        v.textContent = "Nessun evento o promemoria per questo giorno.";
         det.appendChild(v);
-      } else {
-        var ul = document.createElement("ul"); ul.className = "elenco";
-        lista.sort(function (a, b) { return a.quando < b.quando ? -1 : 1; }).forEach(function (p) {
+      }
+      if (listaEventi.length) {
+        var etEv = document.createElement("div"); etEv.className = "etichetta";
+        etEv.style.marginTop = "14px"; etEv.textContent = "Eventi";
+        det.appendChild(etEv);
+        var ulEv = document.createElement("ul"); ulEv.className = "elenco";
+        listaEventi.forEach(function (e) {
+          var li = document.createElement("li");
+          var ora = document.createElement("div"); ora.className = "ora";
+          ora.style.fontSize = "18px"; ora.style.minWidth = "56px";
+          ora.textContent = e.ora || "—";
+          var info = document.createElement("div"); info.className = "info";
+          var tt = document.createElement("div"); tt.className = "titolo"; tt.textContent = e.titolo;
+          info.appendChild(tt);
+          var del = document.createElement("button");
+          del.className = "btn-x"; del.textContent = "✕";
+          del.setAttribute("aria-label", "Elimina evento: " + e.titolo);
+          del.addEventListener("click", function () {
+            eventi = eventi.filter(function (x) { return x.id !== e.id; });
+            salvaEventi(); disegnaCalendario();
+          });
+          li.appendChild(ora); li.appendChild(info); li.appendChild(del);
+          ulEv.appendChild(li);
+        });
+        det.appendChild(ulEv);
+      }
+      if (listaPromo.length) {
+        var etPr = document.createElement("div"); etPr.className = "etichetta";
+        etPr.style.marginTop = "14px"; etPr.textContent = "Promemoria";
+        det.appendChild(etPr);
+        var ulPr = document.createElement("ul"); ulPr.className = "elenco";
+        listaPromo.forEach(function (p) {
           var li = document.createElement("li");
           if (p.fatto) li.classList.add("fatto");
           var ora = document.createElement("div"); ora.className = "ora";
@@ -1048,9 +1252,9 @@
           var tt = document.createElement("div"); tt.className = "titolo"; tt.textContent = p.testo;
           info.appendChild(tt);
           li.appendChild(ora); li.appendChild(info);
-          ul.appendChild(li);
+          ulPr.appendChild(li);
         });
-        det.appendChild(ul);
+        det.appendChild(ulPr);
       }
     }
   }
@@ -1070,6 +1274,7 @@
 
   /* ---------- Battito principale ---------- */
   aggiornaOrologio();
+  disegnaMondo();
   disegnaSveglie();
   disegnaPromo();
   disegnaCalendario();
@@ -1077,6 +1282,7 @@
   mostraImpostazione();
   setInterval(function () {
     aggiornaOrologio();
+    aggiornaMondo();
     controllaSveglie();
     controllaPromemoria();
   }, 1000);
