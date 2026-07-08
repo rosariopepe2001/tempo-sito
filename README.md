@@ -8,6 +8,7 @@ Un sito con gli strumenti del tempo, tutto in italiano e in un'unica pagina:
 - **Sveglia** — sveglie salvate nel browser, con rinvio di 5 minuti
 - **Promemoria** — cose da fare con data e ora, spuntabili
 - **Calendario** — vista del mese con eventi e puntini di eventi e promemoria
+- **Itinerario** — distanza e tempi di viaggio tra due luoghi, a piedi, in bici, monopattino, auto, moto, treno e aereo (dati OpenStreetMap)
 
 Non serve installare nulla: è un solo file `index.html` che funziona in qualsiasi browser.
 Sveglie e promemoria restano salvati nel browser (localStorage) e suonano finché la pagina è aperta.
