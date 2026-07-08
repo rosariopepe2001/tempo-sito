@@ -237,6 +237,11 @@
     transition: border-color .18s ease-out, background .18s ease-out,
                 color .18s ease-out, transform .12s ease-out, filter .18s ease-out;
   }
+  .btn svg {
+    width: 16px; height: 16px; vertical-align: -3px; margin-right: 4px;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
   .btn:hover { border-color: var(--muted); transform: translateY(-1px); }
   .btn:active { transform: scale(.96); }
   .btn.primario { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -673,7 +678,11 @@
             <div class="suggerimenti" id="sug-a"></div>
           </div>
           <button class="btn primario" id="iti-calcola">Calcola</button>
+          <button class="btn" id="iti-posizione">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            Mia posizione</button>
         </div>
+        <p class="hint" style="margin:10px 0 0">Consiglio: se il tuo indirizzo non compare, tocca «Mia posizione» oppure tocca direttamente un punto sulla mappa.</p>
         <div id="iti-stato" class="vuoto" style="display:none"></div>
         <div id="iti-riassunto"></div>
         <div id="iti-mappa" role="img" aria-label="Mappa dell'itinerario"></div>
@@ -1529,6 +1538,37 @@
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
           maxZoom: 19, attribution: "© OpenStreetMap"
         }).addTo(mappaIti);
+        // tocco sulla mappa: scegli se usare il punto come partenza o arrivo
+        mappaIti.on("click", function (ev) {
+          var lat = ev.latlng.lat, lon = ev.latlng.lng;
+          var scatola = document.createElement("div");
+          scatola.style.display = "flex"; scatola.style.gap = "6px";
+          [["da", "Parti da qui"], ["a", "Arriva qui"]].forEach(function (coppia) {
+            var b = document.createElement("button");
+            b.type = "button"; b.className = "btn piccolo";
+            if (coppia[0] === "da") b.classList.add("primario");
+            b.textContent = coppia[1];
+            b.addEventListener("click", function () {
+              mappaIti.closePopup();
+              impostaPunto(coppia[0], {
+                lat: lat, lon: lon,
+                nome: "Punto sulla mappa", testo: "Punto sulla mappa"
+              });
+              // poi prova a dare un nome vero al punto
+              indirizzoDaCoordinate(lat, lon).then(function (indirizzo) {
+                if (indirizzo && sceltePosti[coppia[0]] &&
+                    sceltePosti[coppia[0]].lat === lat) {
+                  impostaPunto(coppia[0], {
+                    lat: lat, lon: lon,
+                    nome: indirizzo.split(",")[0], testo: indirizzo
+                  });
+                }
+              });
+            });
+            scatola.appendChild(b);
+          });
+          L.popup().setLatLng(ev.latlng).setContent(scatola).openOn(mappaIti);
+        });
       }
       mappaIti.invalidateSize();
       return mappaIti;
@@ -1576,6 +1616,40 @@
     if (pr.country && pr.country !== "Italia" && pr.country !== "Italy") parti.push(pr.country);
     return parti.filter(Boolean).join(", ");
   }
+  function impostaPunto(chiave, punto) {
+    $(chiave === "da" ? "iti-da" : "iti-a").value = punto.testo;
+    sceltePosti[chiave] = punto;
+    segnaPunto(chiave, punto);
+  }
+  // cerca prima con Photon (veloce); se non trova nulla riprova con Nominatim
+  function cercaSuggerimenti(testo) {
+    return fetch("https://photon.komoot.io/api/?limit=5&q=" + encodeURIComponent(testo))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var visti = {}, voci = [];
+        (j.features || []).forEach(function (f) {
+          if (!f.geometry || !f.geometry.coordinates) return;
+          var et = etichettaPosto(f);
+          if (!et || visti[et]) return; // niente doppioni
+          visti[et] = true;
+          voci.push({ testo: et, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
+        });
+        if (voci.length) return voci.slice(0, 5);
+        // secondo tentativo: Nominatim conosce più località minori
+        var url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=it&q=" +
+          encodeURIComponent(testo);
+        return fetch(url).then(function (r) { return r.json(); }).then(function (lista) {
+          var visti2 = {}, voci2 = [];
+          (lista || []).forEach(function (r) {
+            var et = (r.display_name || "").split(",").slice(0, 3).join(",");
+            if (!et || visti2[et]) return;
+            visti2[et] = true;
+            voci2.push({ testo: et, lat: +r.lat, lon: +r.lon });
+          });
+          return voci2.slice(0, 5);
+        });
+      });
+  }
   function attivaSuggerimenti(idInput, idLista, chiave) {
     var input = $(idInput), lista = $(idLista), timer = null, ultimaRicerca = "";
     input.setAttribute("autocomplete", "off");
@@ -1587,36 +1661,23 @@
       if (testo.length < 3) { chiudi(); return; }
       timer = setTimeout(function () {
         ultimaRicerca = testo;
-        fetch("https://photon.komoot.io/api/?limit=5&q=" + encodeURIComponent(testo))
-          .then(function (r) { return r.json(); })
-          .then(function (j) {
+        cercaSuggerimenti(testo)
+          .then(function (voci) {
             if (input.value.trim() !== ultimaRicerca) return; // risposta ormai vecchia
-            var visti = {};
-            var trovati = (j.features || []).filter(function (f) {
-              if (!f.geometry || !f.geometry.coordinates) return false;
-              var et = etichettaPosto(f);
-              if (!et || visti[et]) return false; // niente doppioni
-              visti[et] = true;
-              return true;
-            }).slice(0, 5);
             lista.innerHTML = "";
-            if (!trovati.length) { chiudi(); return; }
-            trovati.forEach(function (f) {
+            if (!voci.length) { chiudi(); return; }
+            voci.forEach(function (v) {
               var voce = document.createElement("button");
               voce.type = "button";
-              var testoVoce = etichettaPosto(f);
-              voce.textContent = testoVoce;
+              voce.textContent = v.testo;
               voce.addEventListener("pointerdown", function (ev) {
                 ev.preventDefault(); // non far perdere il focus prima del click
-                input.value = testoVoce;
-                sceltePosti[chiave] = {
-                  lat: f.geometry.coordinates[1],
-                  lon: f.geometry.coordinates[0],
-                  nome: testoVoce.split(",").slice(0, 2).join(","),
-                  testo: testoVoce
-                };
                 chiudi();
-                segnaPunto(chiave, sceltePosti[chiave]);
+                impostaPunto(chiave, {
+                  lat: v.lat, lon: v.lon,
+                  nome: v.testo.split(",").slice(0, 2).join(","),
+                  testo: v.testo
+                });
               });
               lista.appendChild(voce);
             });
@@ -1630,6 +1691,45 @@
   }
   attivaSuggerimenti("iti-da", "sug-da", "da");
   attivaSuggerimenti("iti-a", "sug-a", "a");
+  // la mappa compare appena apri la scheda Itinerario
+  document.querySelector('nav.tabs button[data-tab="itinerario"]')
+    .addEventListener("click", function () { preparaMappa().catch(function () {}); });
+
+  /* ---- "Mia posizione": parte da dove ti trovi, anche se l'indirizzo non è mappato ---- */
+  function indirizzoDaCoordinate(lat, lon) {
+    return fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=it&lat=" +
+      lat + "&lon=" + lon)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var ad = j.address || {};
+        var via = (ad.road || ad.hamlet || ad.village || ad.locality || "") +
+          (ad.house_number ? " " + ad.house_number : "");
+        var comune = ad.town || ad.city || ad.village || ad.municipality || ad.county || "";
+        return [via, comune].filter(Boolean).join(", ");
+      })
+      .catch(function () { return ""; });
+  }
+  $("iti-posizione").addEventListener("click", function () {
+    var bottone = this;
+    if (!navigator.geolocation) {
+      mostraStatoIti("Questo browser non permette di usare la posizione.");
+      return;
+    }
+    bottone.disabled = true;
+    mostraStatoIti("Cerco la tua posizione…");
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      indirizzoDaCoordinate(lat, lon).then(function (indirizzo) {
+        var nome = indirizzo || "La mia posizione";
+        impostaPunto("da", { lat: lat, lon: lon, nome: nome.split(",")[0], testo: nome });
+        mostraStatoIti("");
+        bottone.disabled = false;
+      });
+    }, function () {
+      bottone.disabled = false;
+      mostraStatoIti("Non riesco a leggere la posizione: controlla di aver dato il permesso al browser.");
+    }, { enableHighAccuracy: true, timeout: 12000 });
+  });
   function risolviPosto(chiave, testo) {
     var scelto = sceltePosti[chiave];
     if (scelto && scelto.testo === testo) return Promise.resolve(scelto);
