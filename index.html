@@ -1582,8 +1582,14 @@
       $("iti-mappa").style.display = "block";
       if (!mappaIti) {
         mappaIti = L.map("iti-mappa").setView([42.5, 12.5], 5);
-        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19, attribution: "© OpenStreetMap"
+        // stile CARTO Voyager: gratuito e con un aspetto moderno simile a Google Maps
+        var temaForzato = document.documentElement.getAttribute("data-theme");
+        var scuro = temaForzato ? temaForzato === "dark"
+          : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/" +
+          (scuro ? "dark_all" : "voyager") + "/{z}/{x}/{y}{r}.png", {
+          maxZoom: 19, subdomains: "abcd",
+          attribution: "© OpenStreetMap, © CARTO"
         }).addTo(mappaIti);
         // tocco sulla mappa: scegli se usare il punto come partenza o arrivo
         mappaIti.on("click", function (ev) {
