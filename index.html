@@ -304,8 +304,30 @@
     font: inherit; font-size: 14px; line-height: 1.35; color: var(--ink);
     padding: 10px 12px; cursor: pointer;
   }
-  .suggerimenti button + button { border-top: 1px solid var(--line); }
+  .suggerimenti > * + * { border-top: 1px solid var(--line); }
   .suggerimenti button:hover { background: var(--accent-soft); }
+  .campo-testa { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .stella {
+    border: 0; background: transparent; cursor: pointer; padding: 2px 5px;
+    line-height: 0; border-radius: 8px; color: var(--muted);
+  }
+  .stella svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+  .stella:hover { background: var(--accent-soft); color: var(--accent); }
+  .stella.attiva { color: var(--accent); }
+  .stella.attiva svg { fill: var(--accent); stroke: var(--accent); }
+  .voce-salvata { display: flex; align-items: stretch; }
+  .voce-salvata .scegli {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    border: 0 !important; background: transparent; text-align: left;
+  }
+  .voce-salvata .scegli svg {
+    width: 15px; height: 15px; flex: none; fill: var(--accent); stroke: var(--accent); stroke-width: 1.2;
+  }
+  .voce-salvata .elimina-sal {
+    flex: none; border: 0; background: transparent; color: var(--muted);
+    cursor: pointer; padding: 0 12px; font-size: 16px;
+  }
+  .voce-salvata .elimina-sal:hover { color: var(--accent); background: var(--accent-soft); }
   #iti-mappa {
     height: min(340px, 45vh); border-radius: 16px; margin-top: 16px;
     border: 1px solid var(--line); display: none;
@@ -715,12 +737,20 @@
         <p class="hint">Scrivi da dove parti e dove vuoi arrivare (una città o un indirizzo): ti dico distanza e tempo di viaggio con ogni mezzo. I tempi sono stime indicative; serve la connessione a internet.</p>
         <div class="riga-input" style="justify-content:flex-start">
           <div class="campo" style="flex:1;min-width:150px">
-            <label class="etichetta" for="iti-da">Da</label>
+            <div class="campo-testa">
+              <label class="etichetta" for="iti-da">Da</label>
+              <button type="button" class="stella" id="salva-da" aria-label="Salva la partenza tra i tuoi luoghi">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/></svg></button>
+            </div>
             <input type="text" id="iti-da" placeholder="Es. Napoli" maxlength="80">
             <div class="suggerimenti" id="sug-da"></div>
           </div>
           <div class="campo" style="flex:1;min-width:150px">
-            <label class="etichetta" for="iti-a">A</label>
+            <div class="campo-testa">
+              <label class="etichetta" for="iti-a">A</label>
+              <button type="button" class="stella" id="salva-a" aria-label="Salva l'arrivo tra i tuoi luoghi">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/></svg></button>
+            </div>
             <input type="text" id="iti-a" placeholder="Es. Roma, Colosseo" maxlength="80">
             <div class="suggerimenti" id="sug-a"></div>
           </div>
@@ -729,7 +759,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
             Mia posizione</button>
         </div>
-        <p class="hint" style="margin:10px 0 0">Consiglio: se il tuo indirizzo non compare, tocca «Mia posizione» oppure tocca direttamente un punto sulla mappa.</p>
+        <p class="hint" style="margin:10px 0 0">Se il tuo indirizzo non compare, tocca «Mia posizione» o un punto sulla mappa, poi la ⭐ per salvarlo: la prossima volta lo ritrovi toccando il campo.</p>
         <div id="iti-stato" class="vuoto" style="display:none"></div>
         <div id="iti-riassunto"></div>
         <div id="iti-mappa" role="img" aria-label="Mappa dell'itinerario"></div>
@@ -1669,74 +1699,171 @@
     if (pr.country && pr.country !== "Italia" && pr.country !== "Italy") parti.push(pr.country);
     return parti.filter(Boolean).join(", ");
   }
+  // costruisce un'etichetta pulita da un risultato Nominatim
+  function etichettaNominatim(r) {
+    var a = r.address || {};
+    var primo = a.road
+      ? a.road + (a.house_number ? " " + a.house_number : "")
+      : (r.name || (r.display_name || "").split(",")[0]);
+    var luogo = a.city || a.town || a.village || a.municipality || a.hamlet || a.suburb || a.county || "";
+    var prov = a.county && a.county !== luogo ? a.county : (a.state || "");
+    var estero = (a.country && a.country !== "Italia" && a.country !== "Italy") ? a.country : "";
+    var parti = [primo];
+    if (luogo && luogo !== primo) parti.push(luogo);
+    if (prov && prov !== luogo && prov !== primo) parti.push(prov);
+    if (estero) parti.push(estero);
+    return parti.filter(Boolean).join(", ");
+  }
+  // Nominatim per primo (migliore sugli indirizzi italiani); Photon come riserva
+  function cercaSuggerimenti(testo) {
+    var urlN = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=it&q=" +
+      encodeURIComponent(testo);
+    return fetch(urlN).then(function (r) { return r.json(); }).then(function (lista) {
+      var visti = {}, voci = [];
+      (lista || []).forEach(function (r) {
+        var et = etichettaNominatim(r);
+        if (!et || visti[et]) return;
+        visti[et] = true;
+        voci.push({ testo: et, lat: +r.lat, lon: +r.lon });
+      });
+      if (voci.length) return voci.slice(0, 6);
+      return fetch("https://photon.komoot.io/api/?limit=6&lang=it&q=" + encodeURIComponent(testo))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var v2 = {}, out = [];
+          (j.features || []).forEach(function (f) {
+            if (!f.geometry || !f.geometry.coordinates) return;
+            var et = etichettaPosto(f);
+            if (!et || v2[et]) return;
+            v2[et] = true;
+            out.push({ testo: et, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
+          });
+          return out.slice(0, 6);
+        });
+    }).catch(function () { return []; });
+  }
+
+  /* ---- Luoghi salvati (Casa, Lavoro…): risolvono gli indirizzi che le mappe non conoscono ---- */
+  var luoghiSalvati = carica("tempo.luoghi", []);
+  function salvaLuoghi() { salva("tempo.luoghi", luoghiSalvati); }
+  function stessoPunto(a, b) {
+    return a && b && Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
+  }
+  function luogoSalvatoDi(punto) {
+    for (var i = 0; i < luoghiSalvati.length; i++) {
+      if (stessoPunto(luoghiSalvati[i], punto)) return luoghiSalvati[i];
+    }
+    return null;
+  }
+  var STELLA_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.4l6-.8z"/></svg>';
+  function aggiornaStelle() {
+    ["da", "a"].forEach(function (chiave) {
+      var st = $("salva-" + chiave);
+      var salvato = sceltePosti[chiave] && luogoSalvatoDi(sceltePosti[chiave]);
+      st.classList.toggle("attiva", !!salvato);
+      st.setAttribute("aria-label", salvato
+        ? "Togli questo luogo dai salvati"
+        : (chiave === "da" ? "Salva la partenza tra i tuoi luoghi" : "Salva l'arrivo tra i tuoi luoghi"));
+    });
+  }
   function impostaPunto(chiave, punto) {
     $(chiave === "da" ? "iti-da" : "iti-a").value = punto.testo;
     sceltePosti[chiave] = punto;
     segnaPunto(chiave, punto);
+    aggiornaStelle();
   }
-  // cerca prima con Photon (veloce); se non trova nulla riprova con Nominatim
-  function cercaSuggerimenti(testo) {
-    return fetch("https://photon.komoot.io/api/?limit=5&q=" + encodeURIComponent(testo))
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        var visti = {}, voci = [];
-        (j.features || []).forEach(function (f) {
-          if (!f.geometry || !f.geometry.coordinates) return;
-          var et = etichettaPosto(f);
-          if (!et || visti[et]) return; // niente doppioni
-          visti[et] = true;
-          voci.push({ testo: et, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] });
-        });
-        if (voci.length) return voci.slice(0, 5);
-        // secondo tentativo: Nominatim conosce più località minori
-        var url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=it&q=" +
-          encodeURIComponent(testo);
-        return fetch(url).then(function (r) { return r.json(); }).then(function (lista) {
-          var visti2 = {}, voci2 = [];
-          (lista || []).forEach(function (r) {
-            var et = (r.display_name || "").split(",").slice(0, 3).join(",");
-            if (!et || visti2[et]) return;
-            visti2[et] = true;
-            voci2.push({ testo: et, lat: +r.lat, lon: +r.lon });
-          });
-          return voci2.slice(0, 5);
-        });
-      });
+  function gestisciStella(chiave) {
+    var punto = sceltePosti[chiave];
+    if (!punto) {
+      mostraStatoIti("Prima scegli un luogo nel campo «" + (chiave === "da" ? "Da" : "A") +
+        "» (scrivendolo, con «Mia posizione» o toccando la mappa), poi tocca la stella per salvarlo.");
+      return;
+    }
+    var gia = luogoSalvatoDi(punto);
+    if (gia) {
+      luoghiSalvati = luoghiSalvati.filter(function (l) { return l !== gia; });
+      salvaLuoghi(); aggiornaStelle();
+      mostraStatoIti("«" + gia.nome + "» tolto dai luoghi salvati.");
+      return;
+    }
+    var nome = window.prompt("Che nome dai a questo luogo? (es. Casa, Lavoro)",
+      punto.nome || "Casa");
+    if (nome === null) return;
+    nome = nome.trim() || (punto.nome || "Luogo");
+    luoghiSalvati.push({ nome: nome, lat: punto.lat, lon: punto.lon, testo: punto.testo });
+    salvaLuoghi(); aggiornaStelle();
+    mostraStatoIti("«" + nome + "» salvato: lo ritrovi toccando i campi Da e A.");
   }
+  $("salva-da").addEventListener("click", function () { gestisciStella("da"); });
+  $("salva-a").addEventListener("click", function () { gestisciStella("a"); });
+
   function attivaSuggerimenti(idInput, idLista, chiave) {
     var input = $(idInput), lista = $(idLista), timer = null, ultimaRicerca = "";
     input.setAttribute("autocomplete", "off");
     function chiudi() { lista.classList.remove("aperti"); }
+    function apri() { if (lista.children.length) lista.classList.add("aperti"); }
+    // aggiunge una voce "luogo salvato" con la stellina e il tasto per eliminarla
+    function aggiungiSalvato(l) {
+      var riga = document.createElement("div"); riga.className = "voce-salvata";
+      var scegli = document.createElement("button");
+      scegli.type = "button"; scegli.className = "scegli";
+      scegli.innerHTML = STELLA_SVG + "<span>" + l.nome + "</span>";
+      scegli.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault(); chiudi();
+        impostaPunto(chiave, { lat: l.lat, lon: l.lon, nome: l.nome, testo: l.testo });
+      });
+      var del = document.createElement("button");
+      del.type = "button"; del.className = "elimina-sal"; del.textContent = "✕";
+      del.setAttribute("aria-label", "Elimina il luogo salvato " + l.nome);
+      del.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        luoghiSalvati = luoghiSalvati.filter(function (x) { return x !== l; });
+        salvaLuoghi(); aggiornaStelle();
+        mostraSalvati();
+      });
+      riga.appendChild(scegli); riga.appendChild(del);
+      lista.appendChild(riga);
+    }
+    // mostra i luoghi salvati (usato quando il campo è vuoto o appena selezionato)
+    function mostraSalvati(filtro) {
+      lista.innerHTML = "";
+      luoghiSalvati.filter(function (l) {
+        return !filtro || l.nome.toLowerCase().indexOf(filtro.toLowerCase()) !== -1;
+      }).forEach(aggiungiSalvato);
+      if (lista.children.length) apri(); else chiudi();
+    }
+    function aggiungiRisultato(v) {
+      var voce = document.createElement("button");
+      voce.type = "button"; voce.textContent = v.testo;
+      voce.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault(); chiudi();
+        impostaPunto(chiave, {
+          lat: v.lat, lon: v.lon,
+          nome: v.testo.split(",").slice(0, 2).join(","), testo: v.testo
+        });
+      });
+      lista.appendChild(voce);
+    }
+    input.addEventListener("focus", function () {
+      if (input.value.trim().length < 3) mostraSalvati();
+    });
     input.addEventListener("input", function () {
-      sceltePosti[chiave] = null;
+      sceltePosti[chiave] = null; aggiornaStelle();
       clearTimeout(timer);
       var testo = input.value.trim();
-      if (testo.length < 3) { chiudi(); return; }
+      if (testo.length < 3) { mostraSalvati(testo); return; }
       timer = setTimeout(function () {
         ultimaRicerca = testo;
-        cercaSuggerimenti(testo)
-          .then(function (voci) {
-            if (input.value.trim() !== ultimaRicerca) return; // risposta ormai vecchia
-            lista.innerHTML = "";
-            if (!voci.length) { chiudi(); return; }
-            voci.forEach(function (v) {
-              var voce = document.createElement("button");
-              voce.type = "button";
-              voce.textContent = v.testo;
-              voce.addEventListener("pointerdown", function (ev) {
-                ev.preventDefault(); // non far perdere il focus prima del click
-                chiudi();
-                impostaPunto(chiave, {
-                  lat: v.lat, lon: v.lon,
-                  nome: v.testo.split(",").slice(0, 2).join(","),
-                  testo: v.testo
-                });
-              });
-              lista.appendChild(voce);
-            });
-            lista.classList.add("aperti");
-          })
-          .catch(chiudi);
+        cercaSuggerimenti(testo).then(function (voci) {
+          if (input.value.trim() !== ultimaRicerca) return; // risposta ormai vecchia
+          lista.innerHTML = "";
+          // prima gli eventuali luoghi salvati che combaciano, poi i risultati veri
+          luoghiSalvati.filter(function (l) {
+            return l.nome.toLowerCase().indexOf(testo.toLowerCase()) !== -1;
+          }).forEach(aggiungiSalvato);
+          voci.forEach(aggiungiRisultato);
+          if (lista.children.length) apri(); else chiudi();
+        }).catch(chiudi);
       }, 450);
     });
     input.addEventListener("blur", function () { setTimeout(chiudi, 200); });
