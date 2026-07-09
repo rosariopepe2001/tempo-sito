@@ -328,6 +328,21 @@
     display: block; font-weight: 400; font-size: 12.5px; color: var(--muted);
   }
 
+  /* Che ora sarà + convertitore */
+  .fra-ris {
+    margin-top: 14px; font-size: 26px; font-weight: 300;
+    font-variant-numeric: tabular-nums;
+  }
+  .fra-ris b { font-weight: 700; }
+  .conv { list-style: none; margin: 14px 0 0; padding: 0; }
+  .conv li {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 9px 4px; border-top: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; font-size: 15px;
+  }
+  .conv li span:first-child { color: var(--muted); }
+  .conv li b { font-weight: 650; }
+
   /* Giri cronometro */
   #lista-giri { list-style: none; margin: 18px auto 0; padding: 0; max-width: 380px; }
   #lista-giri li {
@@ -566,6 +581,38 @@
           <button class="btn" id="citta-aggiungi">Aggiungi</button>
         </div>
         <ul class="mondo" id="lista-mondo"></ul>
+      </div>
+      <div class="card">
+        <h2>Che ora sarà?</h2>
+        <p class="hint">Scegli fra quanto tempo, e ti dico che ore saranno.</p>
+        <div class="riga-input" style="justify-content:flex-start">
+          <label class="campo"><span class="etichetta">Fra quanto</span>
+            <input type="number" id="fra-quanto" value="1" min="0" max="100000" step="any" inputmode="decimal"></label>
+          <label class="campo"><span class="etichetta">Unità</span>
+            <select id="fra-unita">
+              <option value="minuti">minuti</option>
+              <option value="ore" selected>ore</option>
+              <option value="giorni">giorni</option>
+            </select></label>
+        </div>
+        <div id="fra-risultato" class="fra-ris">—</div>
+      </div>
+      <div class="card">
+        <h2>Convertitore di tempo</h2>
+        <p class="hint">Trasforma secondi, minuti, ore, giorni e anni l'uno nell'altro.</p>
+        <div class="riga-input" style="justify-content:flex-start">
+          <label class="campo"><span class="etichetta">Quantità</span>
+            <input type="number" id="conv-valore" value="1" min="0" step="any" inputmode="decimal"></label>
+          <label class="campo"><span class="etichetta">Unità</span>
+            <select id="conv-unita">
+              <option value="secondi">secondi</option>
+              <option value="minuti">minuti</option>
+              <option value="ore" selected>ore</option>
+              <option value="giorni">giorni</option>
+              <option value="anni">anni</option>
+            </select></label>
+        </div>
+        <ul id="conv-risultati" class="conv"></ul>
       </div>
     </section>
 
@@ -1758,6 +1805,8 @@
     var da = $("iti-da").value.trim(), a = $("iti-a").value.trim();
     var bottone = this;
     $("iti-risultati").innerHTML = ""; $("iti-riassunto").innerHTML = "";
+    var vecchioGoogle = document.getElementById("iti-google");
+    if (vecchioGoogle) vecchioGoogle.remove();
     if (!da || !a) { mostraStatoIti("Scrivi sia la partenza sia l'arrivo."); return; }
     bottone.disabled = true;
     mostraStatoIti("Cerco i luoghi…");
@@ -1802,6 +1851,16 @@
       if (aria >= 150) {
         ul.appendChild(rigaMezzo("aereo", "In aereo", aria / 780 + 0.5, aria, "solo volo: aggiungi ~2 h di aeroporto"));
       }
+      // apri lo stesso itinerario su Google Maps (indicazioni già compilate)
+      var vaiGoogle = document.createElement("a");
+      vaiGoogle.id = "iti-google";
+      vaiGoogle.className = "btn";
+      vaiGoogle.target = "_blank"; vaiGoogle.rel = "noopener";
+      vaiGoogle.style.display = "inline-block"; vaiGoogle.style.marginTop = "16px";
+      vaiGoogle.href = "https://www.google.com/maps/dir/?api=1&origin=" +
+        p1.lat + "," + p1.lon + "&destination=" + p2.lat + "," + p2.lon;
+      vaiGoogle.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Apri in Google Maps';
+      ul.insertAdjacentElement("afterend", vaiGoogle);
     }).catch(function (err) {
       if (err && err.posto) {
         mostraStatoIti("Non ho trovato «" + err.posto + "». Prova ad aggiungere la città o la provincia.");
@@ -1816,6 +1875,60 @@
     });
   });
 
+  /* ---------- Che ora sarà? ---------- */
+  var MS_UNITA = { minuti: 60000, ore: 3600000, giorni: 86400000 };
+  function aggiornaFra() {
+    var out = $("fra-risultato");
+    var n = parseFloat($("fra-quanto").value);
+    if (isNaN(n) || n < 0) { out.textContent = "—"; return; }
+    var ms = n * MS_UNITA[$("fra-unita").value];
+    if (ms > 3155760000000) { out.textContent = "Troppo lontano nel tempo!"; return; }
+    var d = new Date(Date.now() + ms);
+    var oggi = new Date();
+    var giorniDiff = Math.round(
+      (new Date(d.getFullYear(), d.getMonth(), d.getDate()) -
+       new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate())) / 86400000);
+    var quando;
+    if (giorniDiff === 0) quando = "di oggi";
+    else if (giorniDiff === 1) quando = "di domani";
+    else if (giorniDiff === 2) quando = "di dopodomani";
+    else quando = "di " + giorniSett[d.getDay()] + " " + d.getDate() + " " + mesi[d.getMonth()] +
+      (d.getFullYear() !== oggi.getFullYear() ? " " + d.getFullYear() : "");
+    out.innerHTML = "";
+    out.appendChild(document.createTextNode("Saranno le "));
+    var b = document.createElement("b");
+    b.textContent = due(d.getHours()) + ":" + due(d.getMinutes());
+    out.appendChild(b);
+    out.appendChild(document.createTextNode(" " + quando));
+  }
+  $("fra-quanto").addEventListener("input", aggiornaFra);
+  $("fra-unita").addEventListener("change", aggiornaFra);
+
+  /* ---------- Convertitore di tempo ---------- */
+  var SEC_UNITA = { secondi: 1, minuti: 60, ore: 3600, giorni: 86400, anni: 31557600 };
+  var NOMI_UNITA = { secondi: "Secondi", minuti: "Minuti", ore: "Ore", giorni: "Giorni", anni: "Anni" };
+  function formattaNumero(v) {
+    var cifre = v >= 100 ? 0 : (v >= 1 ? 2 : 6);
+    return v.toLocaleString("it-IT", { maximumFractionDigits: cifre });
+  }
+  function aggiornaConv() {
+    var ul = $("conv-risultati"); ul.innerHTML = "";
+    var n = parseFloat($("conv-valore").value);
+    if (isNaN(n) || n < 0) return;
+    var unita = $("conv-unita").value;
+    var secondi = n * SEC_UNITA[unita];
+    Object.keys(SEC_UNITA).forEach(function (u) {
+      if (u === unita) return;
+      var li = document.createElement("li");
+      var nome = document.createElement("span"); nome.textContent = NOMI_UNITA[u];
+      var val = document.createElement("b"); val.textContent = formattaNumero(secondi / SEC_UNITA[u]);
+      li.appendChild(nome); li.appendChild(val);
+      ul.appendChild(li);
+    });
+  }
+  $("conv-valore").addEventListener("input", aggiornaConv);
+  $("conv-unita").addEventListener("change", aggiornaConv);
+
   /* ---------- Battito principale ---------- */
   aggiornaOrologio();
   disegnaMondo();
@@ -1824,14 +1937,18 @@
   disegnaCalendario();
   disegnaCrono();
   mostraImpostazione();
+  aggiornaFra();
+  aggiornaConv();
   setInterval(function () {
     aggiornaOrologio();
     aggiornaMondo();
+    aggiornaFra();
     controllaSveglie();
     controllaPromemoria();
   }, 1000);
 })();
 </script>
+
 
 
 </html>
