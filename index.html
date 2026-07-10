@@ -1569,7 +1569,51 @@
     var testo = km < 100 ? (Math.round(km * 10) / 10).toString().replace(".", ",") : String(Math.round(km));
     return testo + " km";
   }
+  /* ---- Ricerca indirizzi con Google (chiave bloccata al sito) ---- */
+  // La chiave è limitata a rosariopepe2001.github.io: su altri siti non funziona.
+  var GKEY = "AIzaSyAxP_BrJ0zp6NRC0hzhWFQRn5JrM3CPUG8";
+  var googleGeocoder = null;
+  function caricaGoogleMaps() {
+    if (window.google && window.google.maps) return Promise.resolve();
+    if (caricaGoogleMaps.attesa) return caricaGoogleMaps.attesa;
+    caricaGoogleMaps.attesa = new Promise(function (ok, no) {
+      window.__tempoGoogleReady = function () { ok(); };
+      var s = document.createElement("script");
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + GKEY +
+        "&language=it&region=IT&callback=__tempoGoogleReady";
+      s.async = true; s.onerror = no;
+      document.head.appendChild(s);
+    });
+    return caricaGoogleMaps.attesa;
+  }
+  // restituisce una lista di luoghi da Google; [] se non disponibile o niente trovato
+  function geocodeGoogle(testo) {
+    return caricaGoogleMaps().then(function () {
+      if (!googleGeocoder) googleGeocoder = new google.maps.Geocoder();
+      return new Promise(function (res) {
+        googleGeocoder.geocode({ address: testo }, function (risultati, stato) {
+          if (stato === "OK" && risultati && risultati.length) {
+            res(risultati.slice(0, 6).map(function (r) {
+              return { testo: r.formatted_address,
+                       lat: r.geometry.location.lat(),
+                       lon: r.geometry.location.lng() };
+            }));
+          } else { res([]); }
+        });
+      });
+    }).catch(function () { return []; });
+  }
+  // geocodifica un testo in un punto: prima Google, poi le mappe libere
   function geocodifica(testo) {
+    return geocodeGoogle(testo).then(function (voci) {
+      if (voci.length) {
+        var r = voci[0];
+        return { lat: r.lat, lon: r.lon, nome: r.testo.split(",").slice(0, 2).join(",") };
+      }
+      return geocodificaLibera(testo);
+    });
+  }
+  function geocodificaLibera(testo) {
     var url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=it&q=" +
       encodeURIComponent(testo);
     return fetch(url).then(function (r) {
@@ -1782,6 +1826,13 @@
     return null;
   }
   function cercaSuggerimenti(testo) {
+    // prima Google (conosce anche le frazioni piccole); se non c'è, le mappe libere
+    return geocodeGoogle(testo).then(function (vociG) {
+      if (vociG.length) return vociG;
+      return cercaSuggerimentiLiberi(testo);
+    });
+  }
+  function cercaSuggerimentiLiberi(testo) {
     var urlN = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=it&q=" +
       encodeURIComponent(testo);
     return fetch(urlN).then(function (r) { return r.json(); }).then(function (lista) {
