@@ -765,7 +765,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
             Mia posizione</button>
         </div>
-        <p class="hint" style="margin:10px 0 0">Se il tuo indirizzo non compare, tocca «Mia posizione» o un punto sulla mappa, poi la ⭐ per salvarlo: la prossima volta lo ritrovi toccando il campo.</p>
+        <p class="hint" style="margin:10px 0 0">Indirizzo non trovato? Su Google Maps tieni premuto su un punto, copia le coordinate (es. 40.12, 14.56) e incollale qui. Oppure usa «Mia posizione» o tocca la mappa; poi la ⭐ per salvare il luogo.</p>
         <div id="iti-stato" class="vuoto" style="display:none"></div>
         <div id="iti-riassunto"></div>
         <div class="mappa-scelta" id="mappa-scelta" style="display:none">
@@ -1761,6 +1761,26 @@
     return parti.filter(Boolean).join(", ");
   }
   // Nominatim per primo (migliore sugli indirizzi italiani); Photon come riserva
+  // riconosce coordinate incollate: "40.7, 14.5" oppure un link di Google Maps
+  function estraiCoordinate(testo) {
+    var coppie = [
+      /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/,          // link Google ...@lat,lon
+      /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/,      // link Google !3dlat!4dlon
+      /[?&](?:q|ll|daddr|destination)=(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/, // ?q=lat,lon
+      /^\s*(-?\d{1,2}\.\d+)\s*[,;\s]\s*(-?\d{1,3}\.\d+)\s*$/ // "lat, lon" scritto a mano
+    ];
+    for (var i = 0; i < coppie.length; i++) {
+      var m = testo.match(coppie[i]);
+      if (m) {
+        var lat = parseFloat(m[1]), lon = parseFloat(m[2]);
+        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          var et = lat.toFixed(5) + ", " + lon.toFixed(5);
+          return { lat: lat, lon: lon, nome: "Punto (" + et + ")", testo: et };
+        }
+      }
+    }
+    return null;
+  }
   function cercaSuggerimenti(testo) {
     var urlN = "https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=it&q=" +
       encodeURIComponent(testo);
@@ -1899,6 +1919,18 @@
       clearTimeout(timer);
       var testo = input.value.trim();
       if (testo.length < 3) { mostraSalvati(testo); return; }
+      // coordinate o link di Google Maps incollati: usali direttamente
+      var punto = estraiCoordinate(testo);
+      if (punto) {
+        lista.innerHTML = "";
+        var voce = document.createElement("button");
+        voce.type = "button"; voce.textContent = "📍 Usa questo punto (" + punto.testo + ")";
+        voce.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault(); chiudi(); impostaPunto(chiave, punto);
+        });
+        lista.appendChild(voce); apri();
+        return;
+      }
       timer = setTimeout(function () {
         ultimaRicerca = testo;
         cercaSuggerimenti(testo).then(function (voci) {
@@ -1964,6 +1996,8 @@
   function risolviPosto(chiave, testo) {
     var scelto = sceltePosti[chiave];
     if (scelto && scelto.testo === testo) return Promise.resolve(scelto);
+    var coord = estraiCoordinate(testo);
+    if (coord) return Promise.resolve(coord);
     return geocodifica(testo);
   }
   function mostraStatoIti(testo) {
