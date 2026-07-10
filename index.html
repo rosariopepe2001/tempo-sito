@@ -333,6 +333,12 @@
     border: 1px solid var(--line); display: none;
     position: relative; z-index: 0;
   }
+  .mappa-scelta { display: flex; gap: 8px; margin-top: 16px; }
+  #iti-google-wrap { display: none; margin-top: 12px; }
+  #iti-google-frame {
+    width: 100%; height: min(340px, 45vh);
+    border: 1px solid var(--line); border-radius: 16px; display: block;
+  }
   #iti-risultati .mezzo-icona {
     width: 40px; height: 40px; flex: none;
     display: flex; align-items: center; justify-content: center;
@@ -762,6 +768,11 @@
         <p class="hint" style="margin:10px 0 0">Se il tuo indirizzo non compare, tocca «Mia posizione» o un punto sulla mappa, poi la ⭐ per salvarlo: la prossima volta lo ritrovi toccando il campo.</p>
         <div id="iti-stato" class="vuoto" style="display:none"></div>
         <div id="iti-riassunto"></div>
+        <div class="mappa-scelta" id="mappa-scelta" style="display:none">
+          <button type="button" class="chip attiva" id="vista-google">Mappa di Google</button>
+          <button type="button" class="chip" id="vista-int">Interattiva</button>
+        </div>
+        <div id="iti-google-wrap"><iframe id="iti-google-frame" title="Mappa di Google" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
         <div id="iti-mappa" role="img" aria-label="Mappa dell'itinerario"></div>
         <ul class="elenco" id="iti-risultati"></ul>
       </div>
@@ -1592,6 +1603,7 @@
 
   /* ---- Mappa (Leaflet, caricata solo quando serve) ---- */
   var mappaIti = null, marcatori = { da: null, a: null }, lineaIti = null;
+  var vistaCorrente = "google"; // "google" (iframe) oppure "int" (mappa interattiva)
   function caricaLeaflet() {
     if (window.L) return Promise.resolve();
     if (caricaLeaflet.attesa) return caricaLeaflet.attesa;
@@ -1609,7 +1621,7 @@
   }
   function preparaMappa() {
     return caricaLeaflet().then(function () {
-      $("iti-mappa").style.display = "block";
+      if (vistaCorrente === "int") $("iti-mappa").style.display = "block";
       if (!mappaIti) {
         mappaIti = L.map("iti-mappa").setView([42.5, 12.5], 5);
         // stile CARTO Voyager: gratuito e con un aspetto moderno simile a Google Maps
@@ -1685,6 +1697,40 @@
       inquadraMappa();
     }).catch(function () {});
   }
+
+  /* ---- Mappa di Google incorporata (gratuita, senza chiave) ---- */
+  // costruisce il "codice pb" che Google accetta per centrare la mappa su un punto
+  function pbGoogle(lat, lon, span) {
+    return "!1m14!1m12!1m3!1d" + Math.round(span) + "!2d" + lon + "!3d" + lat +
+      "!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sit!2sit!4v" + Date.now() + "!5m2!1sit!2sit";
+  }
+  function aggiornaGoogle() {
+    var frame = $("iti-google-frame");
+    var da = sceltePosti.da, a = sceltePosti.a, lat, lon, span;
+    if (da && a) {
+      lat = (da.lat + a.lat) / 2; lon = (da.lon + a.lon) / 2;
+      span = Math.max(3000, ariaKm(da, a) * 1700); // abbastanza largo da vedere entrambi
+    } else if (da || a) {
+      var p = da || a; lat = p.lat; lon = p.lon; span = 2500; // livello via
+    } else {
+      lat = 42; lon = 12.5; span = 2200000; // tutta l'Italia
+    }
+    frame.src = "https://www.google.com/maps/embed?pb=" + pbGoogle(lat, lon, span);
+  }
+  function mostraVista(v) {
+    vistaCorrente = v;
+    $("vista-google").classList.toggle("attiva", v === "google");
+    $("vista-int").classList.toggle("attiva", v === "int");
+    $("iti-google-wrap").style.display = v === "google" ? "block" : "none";
+    if (v === "google") {
+      $("iti-mappa").style.display = "none";
+      aggiornaGoogle();
+    } else {
+      preparaMappa().then(function (m) { m.invalidateSize(); inquadraMappa(); });
+    }
+  }
+  $("vista-google").addEventListener("click", function () { mostraVista("google"); });
+  $("vista-int").addEventListener("click", function () { mostraVista("int"); });
 
   /* ---- Suggerimenti d'indirizzo mentre scrivi (Photon/OpenStreetMap) ---- */
   var sceltePosti = { da: null, a: null };
@@ -1771,6 +1817,7 @@
     sceltePosti[chiave] = punto;
     segnaPunto(chiave, punto);
     aggiornaStelle();
+    if (vistaCorrente === "google") aggiornaGoogle();
   }
   function gestisciStella(chiave) {
     var punto = sceltePosti[chiave];
@@ -1873,7 +1920,11 @@
   attivaSuggerimenti("iti-a", "sug-a", "a");
   // la mappa compare appena apri la scheda Itinerario
   document.querySelector('nav.tabs button[data-tab="itinerario"]')
-    .addEventListener("click", function () { preparaMappa().catch(function () {}); });
+    .addEventListener("click", function () {
+      $("mappa-scelta").style.display = "flex";
+      if (vistaCorrente === "google") { $("iti-google-wrap").style.display = "block"; aggiornaGoogle(); }
+      else preparaMappa().catch(function () {});
+    });
 
   /* ---- "Mia posizione": parte da dove ti trovi, anche se l'indirizzo non è mappato ---- */
   function indirizzoDaCoordinate(lat, lon) {
@@ -1948,12 +1999,16 @@
       p1 = r; return risolviPosto("a", a);
     }).then(function (r) {
       p2 = r;
+      // registro i punti risolti così mappa Google e stelle sono allineate
+      sceltePosti.da = p1; sceltePosti.a = p2;
       segnaPunto("da", p1);
       segnaPunto("a", p2);
+      aggiornaStelle();
       mostraStatoIti("Calcolo il percorso…");
       return percorsoStradale(p1, p2);
     }).then(function (strada) {
       disegnaPercorso(strada && strada.geometria);
+      if (vistaCorrente === "google") aggiornaGoogle();
       var aria = ariaKm(p1, p2);
       var stradaKm = strada ? strada.km : aria * 1.3;
       var autoOre = strada ? strada.ore
@@ -2081,6 +2136,7 @@
   }, 1000);
 })();
 </script>
+
 
 
 
