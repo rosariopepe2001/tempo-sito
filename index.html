@@ -1573,6 +1573,7 @@
   // La chiave è limitata a rosariopepe2001.github.io: su altri siti non funziona.
   var GKEY = "AIzaSyAxP_BrJ0zp6NRC0hzhWFQRn5JrM3CPUG8";
   var googleGeocoder = null;
+  var googleSpento = false; // se Google non è disponibile, non riproviamo di continuo
   function caricaGoogleMaps() {
     if (window.google && window.google.maps) return Promise.resolve();
     if (caricaGoogleMaps.attesa) return caricaGoogleMaps.attesa;
@@ -1581,17 +1582,27 @@
       var s = document.createElement("script");
       s.src = "https://maps.googleapis.com/maps/api/js?key=" + GKEY +
         "&language=it&region=IT&callback=__tempoGoogleReady";
-      s.async = true; s.onerror = no;
+      s.async = true;
+      s.onerror = function () { caricaGoogleMaps.attesa = null; no(new Error("script")); };
       document.head.appendChild(s);
+      // se Google non risponde in tempo, non blocchiamo la ricerca
+      setTimeout(function () { caricaGoogleMaps.attesa = null; no(new Error("timeout")); }, 6000);
     });
     return caricaGoogleMaps.attesa;
   }
   // restituisce una lista di luoghi da Google; [] se non disponibile o niente trovato
   function geocodeGoogle(testo) {
+    if (googleSpento) return Promise.resolve([]);
     return caricaGoogleMaps().then(function () {
       if (!googleGeocoder) googleGeocoder = new google.maps.Geocoder();
       return new Promise(function (res) {
+        var chiuso = false;
+        setTimeout(function () { if (!chiuso) { chiuso = true; res([]); } }, 5000);
         googleGeocoder.geocode({ address: testo }, function (risultati, stato) {
+          if (chiuso) return;
+          chiuso = true;
+          // chiave non valida sul dominio: spegni Google e usa le mappe libere
+          if (stato === "REQUEST_DENIED") googleSpento = true;
           if (stato === "OK" && risultati && risultati.length) {
             res(risultati.slice(0, 6).map(function (r) {
               return { testo: r.formatted_address,
