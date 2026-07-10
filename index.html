@@ -2103,8 +2103,9 @@
       mostraStatoIti("Calcolo il percorso…");
       return percorsoStradale(p1, p2);
     }).then(function (strada) {
+      // dopo il calcolo mostra la mappa interattiva col percorso disegnato
+      mostraVista("int");
       disegnaPercorso(strada && strada.geometria);
-      if (vistaCorrente === "google") aggiornaGoogle();
       var aria = ariaKm(p1, p2);
       var stradaKm = strada ? strada.km : aria * 1.3;
       var autoOre = strada ? strada.ore
