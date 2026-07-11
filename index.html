@@ -604,23 +604,30 @@
         <h2>Nel mondo</h2>
         <p class="hint">Che ore sono nelle altre città. Il sole indica il giorno, la luna la notte.</p>
         <div class="riga-input" style="justify-content:flex-start">
-          <label class="campo"><span class="etichetta">Aggiungi città</span>
-            <select id="citta-scelta"></select></label>
-          <button class="btn" id="citta-aggiungi">Aggiungi</button>
+          <div class="campo" style="flex:1;min-width:200px">
+            <label class="etichetta" for="citta-cerca">Aggiungi una città</label>
+            <input type="text" id="citta-cerca" placeholder="Cerca una città nel mondo…" autocomplete="off" maxlength="40">
+            <div class="suggerimenti" id="sug-citta"></div>
+          </div>
         </div>
         <ul class="mondo" id="lista-mondo"></ul>
       </div>
       <div class="card">
         <h2>Che ora sarà?</h2>
-        <p class="hint">Scegli fra quanto tempo, e ti dico che ore saranno.</p>
+        <p class="hint">Scegli quanto tempo e in che direzione: ti dico che ore saranno (nel futuro) o che ore erano (nel passato).</p>
         <div class="riga-input" style="justify-content:flex-start">
-          <label class="campo"><span class="etichetta">Fra quanto</span>
+          <label class="campo"><span class="etichetta">Quanto</span>
             <input type="number" id="fra-quanto" value="1" min="0" max="100000" step="any" inputmode="decimal"></label>
           <label class="campo"><span class="etichetta">Unità</span>
             <select id="fra-unita">
               <option value="minuti">minuti</option>
               <option value="ore" selected>ore</option>
               <option value="giorni">giorni</option>
+            </select></label>
+          <label class="campo"><span class="etichetta">Direzione</span>
+            <select id="fra-verso">
+              <option value="fra" selected>nel futuro</option>
+              <option value="fa">nel passato</option>
             </select></label>
         </div>
         <div id="fra-risultato" class="fra-ris">—</div>
@@ -733,6 +740,7 @@
         </div>
         <div class="griglia-cal" id="griglia-cal"></div>
         <div id="dettaglio-giorno"></div>
+        <div id="eventi-mese"></div>
       </div>
     </section>
 
@@ -768,12 +776,7 @@
         <p class="hint" style="margin:10px 0 0">Indirizzo non trovato? Su Google Maps tieni premuto su un punto, copia le coordinate (es. 40.12, 14.56) e incollale qui. Oppure usa «Mia posizione» o tocca la mappa; poi la ⭐ per salvare il luogo.</p>
         <div id="iti-stato" class="vuoto" style="display:none"></div>
         <div id="iti-riassunto"></div>
-        <div class="mappa-scelta" id="mappa-scelta" style="display:none">
-          <button type="button" class="chip attiva" id="vista-google">Mappa di Google</button>
-          <button type="button" class="chip" id="vista-int">Interattiva</button>
-        </div>
-        <div id="iti-google-wrap"><iframe id="iti-google-frame" title="Mappa di Google" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
-        <div id="iti-mappa" role="img" aria-label="Mappa dell'itinerario"></div>
+        <div id="iti-google-wrap"><iframe id="iti-google-frame" title="Mappa del percorso" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>
         <ul class="elenco" id="iti-risultati"></ul>
       </div>
     </section>
@@ -977,7 +980,24 @@
     "Pechino": "Asia/Shanghai", "Tokyo": "Asia/Tokyo", "Seul": "Asia/Seoul",
     "Sydney": "Australia/Sydney", "Auckland": "Pacific/Auckland", "Honolulu": "Pacific/Honolulu"
   };
-  var citta = carica("tempo.citta", ["New York", "Londra", "Dubai", "Tokyo"]);
+  var citta = carica("tempo.citta", [
+    { nome: "New York", tz: "America/New_York" }, { nome: "Londra", tz: "Europe/London" },
+    { nome: "Dubai", tz: "Asia/Dubai" }, { nome: "Tokyo", tz: "Asia/Tokyo" }
+  ]);
+  // compatibilità coi vecchi dati (che salvavano solo il nome della città)
+  citta = citta.map(function (c) { return typeof c === "string" ? { nome: c, tz: FUSI[c] } : c; })
+    .filter(function (c) { return c && c.tz; });
+  // elenco di TUTTE le città/fusi che il browser conosce (per cercarne una qualsiasi)
+  var TUTTI_FUSI = (function () {
+    var out = [], visti = {};
+    function agg(nome, tz) { if (nome && tz && !visti[nome]) { visti[nome] = 1; out.push({ nome: nome, tz: tz }); } }
+    Object.keys(FUSI).forEach(function (n) { agg(n, FUSI[n]); }); // nomi in italiano per le grandi città
+    try {
+      if (Intl.supportedValuesOf)
+        Intl.supportedValuesOf("timeZone").forEach(function (tz) { agg(tz.split("/").pop().replace(/_/g, " "), tz); });
+    } catch (e) {}
+    return out;
+  })();
   var formatoriFuso = {};
   function oraNelFuso(tz) {
     if (!formatoriFuso[tz]) {
@@ -997,14 +1017,14 @@
   var LUNA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
   function disegnaMondo() {
     var ul = $("lista-mondo"); ul.innerHTML = "";
-    citta.forEach(function (nome, indice) {
-      if (!FUSI[nome]) return;
+    citta.forEach(function (c, indice) {
+      if (!c.tz) return;
       var li = document.createElement("li");
       li.style.animationDelay = Math.min(indice * 40, 320) + "ms";
 
       var riga = document.createElement("div"); riga.className = "c-nome";
       var icona = document.createElement("span"); icona.style.display = "inline-flex";
-      var testoNome = document.createElement("span"); testoNome.textContent = nome;
+      var testoNome = document.createElement("span"); testoNome.textContent = c.nome;
       riga.appendChild(icona); riga.appendChild(testoNome);
 
       var ora = document.createElement("div"); ora.className = "c-ora";
@@ -1012,31 +1032,22 @@
 
       var del = document.createElement("button");
       del.className = "btn-x"; del.textContent = "✕";
-      del.setAttribute("aria-label", "Togli " + nome);
+      del.setAttribute("aria-label", "Togli " + c.nome);
       del.addEventListener("click", function () {
-        citta = citta.filter(function (c) { return c !== nome; });
+        citta = citta.filter(function (x) { return x.tz !== c.tz; });
         salva("tempo.citta", citta);
         disegnaMondo();
       });
 
       li.appendChild(riga); li.appendChild(ora); li.appendChild(diff); li.appendChild(del);
-      li.dataset.citta = nome;
+      li.dataset.tz = c.tz;
       ul.appendChild(li);
     });
     aggiornaMondo();
-    // riempi il menu con le città non ancora aggiunte
-    var sel = $("citta-scelta"); sel.innerHTML = "";
-    Object.keys(FUSI).sort(function (a, b) { return a.localeCompare(b, "it"); }).forEach(function (nome) {
-      if (citta.indexOf(nome) === -1) {
-        var op = document.createElement("option");
-        op.value = nome; op.textContent = nome;
-        sel.appendChild(op);
-      }
-    });
   }
   function aggiornaMondo() {
     document.querySelectorAll("#lista-mondo li").forEach(function (li) {
-      var nome = li.dataset.citta, tz = FUSI[nome];
+      var tz = li.dataset.tz;
       var testo = oraNelFuso(tz);
       li.querySelector(".c-ora").textContent = testo;
       var d = differenzaOre(tz);
@@ -1046,14 +1057,35 @@
       li.querySelector(".c-nome span").innerHTML = (oraLocale >= 7 && oraLocale < 20) ? SOLE : LUNA;
     });
   }
-  $("citta-aggiungi").addEventListener("click", function () {
-    var nome = $("citta-scelta").value;
-    if (nome && citta.indexOf(nome) === -1) {
-      citta.push(nome);
-      salva("tempo.citta", citta);
-      disegnaMondo();
-    }
-  });
+  // ricerca città: suggerimenti mentre scrivi, aggiungi con un tocco
+  (function () {
+    var input = $("citta-cerca"), lista = $("sug-citta");
+    function chiudi() { lista.classList.remove("aperti"); }
+    input.addEventListener("input", function () {
+      var q = input.value.trim().toLowerCase();
+      lista.innerHTML = "";
+      if (q.length < 2) { chiudi(); return; }
+      var trovati = TUTTI_FUSI.filter(function (c) {
+        return c.nome.toLowerCase().indexOf(q) !== -1 &&
+          !citta.some(function (x) { return x.tz === c.tz; });
+      }).slice(0, 8);
+      if (!trovati.length) { chiudi(); return; }
+      trovati.forEach(function (c) {
+        var b = document.createElement("button");
+        b.type = "button"; b.textContent = c.nome;
+        b.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault();
+          citta.push({ nome: c.nome, tz: c.tz });
+          salva("tempo.citta", citta);
+          input.value = ""; chiudi(); disegnaMondo();
+        });
+        lista.appendChild(b);
+      });
+      lista.classList.add("aperti");
+    });
+    input.addEventListener("blur", function () { setTimeout(chiudi, 200); });
+    input.addEventListener("keydown", function (ev) { if (ev.key === "Escape") chiudi(); });
+  })();
 
   /* ---------- Cronometro ---------- */
   var cronoInizio = 0, cronoAccumulato = 0, cronoTimer = null, giri = [];
@@ -1524,6 +1556,49 @@
         det.appendChild(ulPr);
       }
     }
+    disegnaEventiMese();
+  }
+  // elenco di tutti gli eventi e promemoria del mese, sotto il calendario
+  function disegnaEventiMese() {
+    var em = $("eventi-mese"); em.innerHTML = "";
+    var voci = [];
+    eventi.forEach(function (e) {
+      var p = (e.data || "").split("-");
+      if (+p[0] === calAnno && +p[1] === calMese + 1)
+        voci.push({ giorno: +p[2], ora: e.ora || "", testo: e.titolo, tipo: "evento", data: e.data });
+    });
+    promemoria.forEach(function (p) {
+      var q = p.quando || "";
+      if (+q.slice(0, 4) === calAnno && +q.slice(5, 7) === calMese + 1 && !p.fatto)
+        voci.push({ giorno: +q.slice(8, 10), ora: q.slice(11, 16), testo: p.testo, tipo: "promemoria", data: q.slice(0, 10) });
+    });
+    voci.sort(function (a, b) { return a.giorno - b.giorno || (a.ora || "99").localeCompare(b.ora || "99"); });
+    var tit = document.createElement("h3");
+    tit.style.cssText = "margin:22px 0 4px;font-size:16px;text-transform:capitalize";
+    tit.textContent = "Eventi di " + mesi[calMese] + " " + calAnno;
+    em.appendChild(tit);
+    if (!voci.length) {
+      var vv = document.createElement("div"); vv.className = "vuoto";
+      vv.textContent = "Nessun evento o promemoria questo mese.";
+      em.appendChild(vv); return;
+    }
+    var ul = document.createElement("ul"); ul.className = "elenco";
+    voci.forEach(function (v) {
+      var li = document.createElement("li"); li.style.cursor = "pointer";
+      var g = document.createElement("div"); g.className = "ora";
+      g.style.fontSize = "15px"; g.style.minWidth = "64px";
+      g.textContent = v.giorno + " " + mesi[calMese].slice(0, 3);
+      var info = document.createElement("div"); info.className = "info";
+      var tt = document.createElement("div"); tt.className = "titolo";
+      tt.textContent = v.testo + (v.ora ? "  ·  " + v.ora : "");
+      var q = document.createElement("div"); q.className = "quando";
+      q.textContent = v.tipo === "evento" ? "evento" : "promemoria";
+      info.appendChild(tt); info.appendChild(q);
+      li.addEventListener("click", function () { giornoScelto = v.data; disegnaCalendario(); });
+      li.appendChild(g); li.appendChild(info);
+      ul.appendChild(li);
+    });
+    em.appendChild(ul);
   }
   $("cal-prec").addEventListener("click", function () {
     calMese--; if (calMese < 0) { calMese = 11; calAnno--; }
@@ -1675,6 +1750,8 @@
     return caricaLeaflet.attesa;
   }
   function preparaMappa() {
+    // mappa interattiva rimossa: l'itinerario ora usa la mappa di Google col percorso
+    return Promise.reject(new Error("mappa interattiva rimossa"));
     return caricaLeaflet().then(function () {
       if (vistaCorrente === "int") $("iti-mappa").style.display = "block";
       if (!mappaIti) {
@@ -1772,20 +1849,13 @@
     }
     frame.src = "https://www.google.com/maps/embed?pb=" + pbGoogle(lat, lon, span);
   }
-  function mostraVista(v) {
-    vistaCorrente = v;
-    $("vista-google").classList.toggle("attiva", v === "google");
-    $("vista-int").classList.toggle("attiva", v === "int");
-    $("iti-google-wrap").style.display = v === "google" ? "block" : "none";
-    if (v === "google") {
-      $("iti-mappa").style.display = "none";
-      aggiornaGoogle();
-    } else {
-      preparaMappa().then(function (m) { m.invalidateSize(); inquadraMappa(); });
-    }
+  // mostra sulla mappa di Google il percorso disegnato (Maps Embed API, gratuita)
+  function mostraDirezioniGoogle(p1, p2) {
+    $("iti-google-wrap").style.display = "block";
+    $("iti-google-frame").src = "https://www.google.com/maps/embed/v1/directions?key=" + GKEY +
+      "&origin=" + p1.lat + "," + p1.lon + "&destination=" + p2.lat + "," + p2.lon +
+      "&mode=driving&language=it&region=IT";
   }
-  $("vista-google").addEventListener("click", function () { mostraVista("google"); });
-  $("vista-int").addEventListener("click", function () { mostraVista("int"); });
 
   /* ---- Suggerimenti d'indirizzo mentre scrivi (Photon/OpenStreetMap) ---- */
   var sceltePosti = { da: null, a: null };
@@ -2015,9 +2085,8 @@
   // la mappa compare appena apri la scheda Itinerario
   document.querySelector('nav.tabs button[data-tab="itinerario"]')
     .addEventListener("click", function () {
-      $("mappa-scelta").style.display = "flex";
-      if (vistaCorrente === "google") { $("iti-google-wrap").style.display = "block"; aggiornaGoogle(); }
-      else preparaMappa().catch(function () {});
+      $("iti-google-wrap").style.display = "block";
+      aggiornaGoogle();
     });
 
   /* ---- "Mia posizione": parte da dove ti trovi, anche se l'indirizzo non è mappato ---- */
@@ -2103,9 +2172,8 @@
       mostraStatoIti("Calcolo il percorso…");
       return percorsoStradale(p1, p2);
     }).then(function (strada) {
-      // dopo il calcolo mostra la mappa interattiva col percorso disegnato
-      mostraVista("int");
-      disegnaPercorso(strada && strada.geometria);
+      // dopo il calcolo mostra il percorso disegnato sulla mappa di Google
+      mostraDirezioniGoogle(p1, p2);
       var aria = ariaKm(p1, p2);
       var stradaKm = strada ? strada.km : aria * 1.3;
       var autoOre = strada ? strada.ore
@@ -2166,8 +2234,9 @@
     var out = $("fra-risultato");
     var n = parseFloat($("fra-quanto").value);
     if (isNaN(n) || n < 0) { out.textContent = "—"; return; }
-    var ms = n * MS_UNITA[$("fra-unita").value];
-    if (ms > 3155760000000) { out.textContent = "Troppo lontano nel tempo!"; return; }
+    var passato = $("fra-verso").value === "fa";
+    var ms = n * MS_UNITA[$("fra-unita").value] * (passato ? -1 : 1);
+    if (Math.abs(ms) > 3155760000000) { out.textContent = "Troppo lontano nel tempo!"; return; }
     var d = new Date(Date.now() + ms);
     var oggi = new Date();
     var giorniDiff = Math.round(
@@ -2177,10 +2246,12 @@
     if (giorniDiff === 0) quando = "di oggi";
     else if (giorniDiff === 1) quando = "di domani";
     else if (giorniDiff === 2) quando = "di dopodomani";
+    else if (giorniDiff === -1) quando = "di ieri";
+    else if (giorniDiff === -2) quando = "dell'altro ieri";
     else quando = "di " + giorniSett[d.getDay()] + " " + d.getDate() + " " + mesi[d.getMonth()] +
       (d.getFullYear() !== oggi.getFullYear() ? " " + d.getFullYear() : "");
     out.innerHTML = "";
-    out.appendChild(document.createTextNode("Saranno le "));
+    out.appendChild(document.createTextNode(passato ? "Erano le " : "Saranno le "));
     var b = document.createElement("b");
     b.textContent = due(d.getHours()) + ":" + due(d.getMinutes());
     out.appendChild(b);
@@ -2188,6 +2259,7 @@
   }
   $("fra-quanto").addEventListener("input", aggiornaFra);
   $("fra-unita").addEventListener("change", aggiornaFra);
+  $("fra-verso").addEventListener("change", aggiornaFra);
 
   /* ---------- Convertitore di tempo ---------- */
   var SEC_UNITA = { secondi: 1, minuti: 60, ore: 3600, giorni: 86400, anni: 31557600 };
@@ -2233,6 +2305,7 @@
   }, 1000);
 })();
 </script>
+
 
 
 
