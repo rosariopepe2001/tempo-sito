@@ -6,8 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tempo">
-<link rel="icon" href="icona.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="tz.js"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <script>
   if ("serviceWorker" in navigator) {
@@ -360,6 +361,12 @@
   #iti-risultati .tempo-viaggio small {
     display: block; font-weight: 400; font-size: 12.5px; color: var(--muted);
   }
+  #iti-risultati li.non-utile { opacity: .6; }
+  #iti-risultati li.non-utile .mezzo-icona { background: var(--line); color: var(--muted); }
+  #iti-risultati .non-utile-badge {
+    font-size: 12.5px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .03em; white-space: nowrap;
+  }
 
   /* Che ora sarà + convertitore */
   .fra-ris {
@@ -478,6 +485,19 @@
   /* Calendario */
   .cal-testata { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   .cal-testata h3 { margin: 0; font-size: 18px; font-weight: 700; text-transform: capitalize; }
+  .cal-titolo {
+    margin: 0; font: inherit; font-size: 18px; font-weight: 700; text-transform: capitalize;
+    background: transparent; border: 0; color: var(--ink); cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border-radius: 8px;
+  }
+  .cal-titolo::after { content: "▾"; font-size: 13px; color: var(--muted); }
+  .cal-titolo:hover { background: var(--accent-soft); }
+  .cal-picker { display: flex; gap: 8px; margin: 0 0 14px; }
+  .cal-picker[hidden] { display: none; }
+  .cal-picker select {
+    flex: 1; font: inherit; font-size: 15px; padding: 9px 12px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  }
   .cal-nav { display: flex; gap: 6px; }
   .cal-nav button {
     font: inherit; font-size: 16px; width: 36px; height: 36px;
@@ -736,12 +756,16 @@
     <section role="tabpanel" id="pan-calendario">
       <div class="card">
         <div class="cal-testata">
-          <h3 id="cal-titolo"></h3>
+          <button type="button" id="cal-titolo" class="cal-titolo" aria-label="Scegli mese e anno"></button>
           <div class="cal-nav">
             <button id="cal-prec" aria-label="Mese precedente">‹</button>
             <button id="cal-oggi-btn" style="width:auto;padding:0 12px;font-size:13px;font-weight:600">Oggi</button>
             <button id="cal-succ" aria-label="Mese successivo">›</button>
           </div>
+        </div>
+        <div id="cal-picker" class="cal-picker" hidden>
+          <select id="cal-mese" aria-label="Mese"></select>
+          <select id="cal-anno" aria-label="Anno"></select>
         </div>
         <div class="griglia-cal" id="griglia-cal"></div>
         <div id="dettaglio-giorno"></div>
@@ -1062,31 +1086,53 @@
       li.querySelector(".c-nome span").innerHTML = (oraLocale >= 7 && oraLocale < 20) ? SOLE : LUNA;
     });
   }
-  // ricerca città: suggerimenti mentre scrivi, aggiungi con un tocco
+  // ricerca città: trova QUALSIASI paese del mondo e ne ricava il fuso orario
   (function () {
-    var input = $("citta-cerca"), lista = $("sug-citta");
+    var input = $("citta-cerca"), lista = $("sug-citta"), timer = null, ultima = "";
     function chiudi() { lista.classList.remove("aperti"); }
+    function nomeLuogo(r) {
+      var a = r.address || {};
+      var primo = r.name || a.city || a.town || a.village || a.hamlet || (r.display_name || "").split(",")[0];
+      var luogo = a.state || a.country || "";
+      return [primo, luogo].filter(Boolean).join(", ");
+    }
     input.addEventListener("input", function () {
-      var q = input.value.trim().toLowerCase();
+      clearTimeout(timer);
+      var q = input.value.trim();
       lista.innerHTML = "";
       if (q.length < 2) { chiudi(); return; }
-      var trovati = TUTTI_FUSI.filter(function (c) {
-        return c.nome.toLowerCase().indexOf(q) !== -1 &&
-          !citta.some(function (x) { return x.tz === c.tz; });
-      }).slice(0, 8);
-      if (!trovati.length) { chiudi(); return; }
-      trovati.forEach(function (c) {
-        var b = document.createElement("button");
-        b.type = "button"; b.textContent = c.nome;
-        b.addEventListener("pointerdown", function (ev) {
-          ev.preventDefault();
-          citta.push({ nome: c.nome, tz: c.tz });
-          salva("tempo.citta", citta);
-          input.value = ""; chiudi(); disegnaMondo();
-        });
-        lista.appendChild(b);
-      });
-      lista.classList.add("aperti");
+      timer = setTimeout(function () {
+        ultima = q;
+        fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&accept-language=it&q=" + encodeURIComponent(q))
+          .then(function (r) { return r.json(); })
+          .then(function (elenco) {
+            if (input.value.trim() !== ultima) return;
+            lista.innerHTML = "";
+            var visti = {};
+            (elenco || []).forEach(function (r) {
+              if (lista.children.length >= 8) return;
+              var lat = +r.lat, lon = +r.lon;
+              if (isNaN(lat) || isNaN(lon)) return;
+              var nome = nomeLuogo(r);
+              if (!nome || visti[nome]) return;
+              var tz;
+              try { tz = tzlookup(lat, lon); } catch (e) { return; }
+              if (!tz) return;
+              visti[nome] = 1;
+              var b = document.createElement("button");
+              b.type = "button"; b.textContent = nome;
+              b.addEventListener("pointerdown", function (ev) {
+                ev.preventDefault();
+                citta.push({ nome: nome.split(",")[0], tz: tz });
+                salva("tempo.citta", citta);
+                input.value = ""; chiudi(); disegnaMondo();
+              });
+              lista.appendChild(b);
+            });
+            if (lista.children.length) lista.classList.add("aperti"); else chiudi();
+          })
+          .catch(chiudi);
+      }, 350);
     });
     input.addEventListener("blur", function () { setTimeout(chiudi, 200); });
     input.addEventListener("keydown", function (ev) { if (ev.key === "Escape") chiudi(); });
@@ -1568,38 +1614,38 @@
     var em = $("eventi-mese"); em.innerHTML = "";
     var voci = [];
     eventi.forEach(function (e) {
-      var p = (e.data || "").split("-");
-      if (+p[0] === calAnno && +p[1] === calMese + 1)
-        voci.push({ giorno: +p[2], ora: e.ora || "", testo: e.titolo, tipo: "evento", data: e.data });
+      voci.push({ data: e.data || "", ora: e.ora || "", testo: e.titolo, tipo: "evento" });
     });
     promemoria.forEach(function (p) {
-      var q = p.quando || "";
-      if (+q.slice(0, 4) === calAnno && +q.slice(5, 7) === calMese + 1 && !p.fatto)
-        voci.push({ giorno: +q.slice(8, 10), ora: q.slice(11, 16), testo: p.testo, tipo: "promemoria", data: q.slice(0, 10) });
+      if (p.fatto) return;
+      voci.push({ data: (p.quando || "").slice(0, 10), ora: (p.quando || "").slice(11, 16), testo: p.testo, tipo: "promemoria" });
     });
-    voci.sort(function (a, b) { return a.giorno - b.giorno || (a.ora || "99").localeCompare(b.ora || "99"); });
+    voci.sort(function (a, b) { return (a.data + "T" + (a.ora || "99")).localeCompare(b.data + "T" + (b.ora || "99")); });
     var tit = document.createElement("h3");
-    tit.style.cssText = "margin:22px 0 4px;font-size:16px;text-transform:capitalize";
-    tit.textContent = "Eventi di " + mesi[calMese] + " " + calAnno;
+    tit.style.cssText = "margin:22px 0 4px;font-size:16px";
+    tit.textContent = "Tutti gli eventi e promemoria";
     em.appendChild(tit);
     if (!voci.length) {
       var vv = document.createElement("div"); vv.className = "vuoto";
-      vv.textContent = "Nessun evento o promemoria questo mese.";
+      vv.textContent = "Nessun evento o promemoria.";
       em.appendChild(vv); return;
     }
     var ul = document.createElement("ul"); ul.className = "elenco";
     voci.forEach(function (v) {
+      var parti = (v.data || "").split("-");
       var li = document.createElement("li"); li.style.cursor = "pointer";
       var g = document.createElement("div"); g.className = "ora";
-      g.style.fontSize = "15px"; g.style.minWidth = "64px";
-      g.textContent = v.giorno + " " + mesi[calMese].slice(0, 3);
+      g.style.fontSize = "13.5px"; g.style.minWidth = "82px"; g.style.lineHeight = "1.3";
+      g.textContent = parti.length === 3 ? (+parti[2] + " " + mesi[+parti[1] - 1].slice(0, 3) + " " + parti[0]) : "—";
       var info = document.createElement("div"); info.className = "info";
       var tt = document.createElement("div"); tt.className = "titolo";
       tt.textContent = v.testo + (v.ora ? "  ·  " + v.ora : "");
       var q = document.createElement("div"); q.className = "quando";
       q.textContent = v.tipo === "evento" ? "evento" : "promemoria";
       info.appendChild(tt); info.appendChild(q);
-      li.addEventListener("click", function () { giornoScelto = v.data; disegnaCalendario(); });
+      li.addEventListener("click", function () {
+        if (parti.length === 3) { calAnno = +parti[0]; calMese = +parti[1] - 1; giornoScelto = v.data; disegnaCalendario(); }
+      });
       li.appendChild(g); li.appendChild(info);
       ul.appendChild(li);
     });
@@ -1618,6 +1664,24 @@
     giornoScelto = chiaveGiorno(calAnno, calMese, d.getDate());
     disegnaCalendario();
   });
+  // selettore rapido mese/anno (per andare veloce a una data lontana)
+  (function () {
+    var selM = $("cal-mese"), selA = $("cal-anno"), picker = $("cal-picker");
+    mesi.forEach(function (m, i) {
+      var o = document.createElement("option"); o.value = i;
+      o.textContent = m.charAt(0).toUpperCase() + m.slice(1); selM.appendChild(o);
+    });
+    for (var a = 1970; a <= 2100; a++) {
+      var o2 = document.createElement("option"); o2.value = a; o2.textContent = a; selA.appendChild(o2);
+    }
+    $("cal-titolo").addEventListener("click", function () {
+      selM.value = calMese; selA.value = calAnno;
+      picker.hidden = !picker.hidden;
+    });
+    function applica() { calMese = +selM.value; calAnno = +selA.value; picker.hidden = true; disegnaCalendario(); }
+    selM.addEventListener("change", applica);
+    selA.addEventListener("change", applica);
+  })();
 
   /* ---------- Itinerario ---------- */
   var ICONE_MEZZI = {
@@ -2155,6 +2219,50 @@
     li.appendChild(ic); li.appendChild(info); li.appendChild(t);
     return li;
   }
+  function rigaNonUtile(chiave, nome, motivo) {
+    var li = document.createElement("li"); li.className = "non-utile";
+    var ic = document.createElement("div"); ic.className = "mezzo-icona"; ic.innerHTML = ICONE_MEZZI[chiave];
+    var info = document.createElement("div"); info.className = "info";
+    var tit = document.createElement("div"); tit.className = "titolo"; tit.textContent = nome;
+    var q = document.createElement("div"); q.className = "quando"; q.textContent = motivo;
+    info.appendChild(tit); info.appendChild(q);
+    var t = document.createElement("div"); t.className = "tempo-viaggio non-utile-badge"; t.textContent = "Non utilizzabile";
+    li.appendChild(ic); li.appendChild(info); li.appendChild(t);
+    return li;
+  }
+  // controlla su OpenStreetMap se ci sono stazioni/aeroporti vicino a partenza e arrivo
+  function verificaMezzi(p1, p2, aria) {
+    var q = "[out:json][timeout:20];(" +
+      "node(around:8000," + p1.lat + "," + p1.lon + ")[railway=station];" +
+      "node(around:8000," + p2.lat + "," + p2.lon + ")[railway=station];" +
+      "node(around:70000," + p1.lat + "," + p1.lon + ")[aeroway=aerodrome];" +
+      "node(around:70000," + p2.lat + "," + p2.lon + ")[aeroway=aerodrome];" +
+      ");out;";
+    function chiedi(urls) {
+      return fetch(urls[0], {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "data=" + encodeURIComponent(q)
+      })
+        .then(function (r) { return r.text(); })
+        .then(function (t) { if (t.trim().charAt(0) !== "{") throw new Error("x"); return JSON.parse(t); })
+        .catch(function () { if (urls.length > 1) return chiedi(urls.slice(1)); throw new Error("ko"); });
+    }
+    return chiedi(["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"])
+      .then(function (j) {
+        var nodi = j.elements || [];
+        function trovato(punto, tipo, raggio) {
+          return nodi.some(function (n) {
+            var tg = n.tags || {};
+            var ok = tipo === "stazione" ? tg.railway === "station" : tg.aeroway === "aerodrome";
+            return ok && typeof n.lat === "number" && ariaKm(punto, { lat: n.lat, lon: n.lon }) <= raggio;
+          });
+        }
+        var treno = trovato(p1, "stazione", 5) && trovato(p2, "stazione", 5);
+        var aereo = aria >= 200 && trovato(p1, "aeroporto", 70) && trovato(p2, "aeroporto", 70);
+        return { treno: treno, aereo: aereo, noto: true };
+      })
+      .catch(function () { return { treno: null, aereo: null, noto: false }; });
+  }
   $("iti-calcola").addEventListener("click", function () {
     var da = $("iti-da").value.trim(), a = $("iti-a").value.trim();
     var bottone = this;
@@ -2205,10 +2313,17 @@
       ul.appendChild(rigaMezzo("moto", "In moto", autoOre * 0.9, stradaKm, "stima"));
       var ferro = aria * 1.15;
       var velTreno = aria > 350 ? 150 : (aria > 120 ? 110 : 65);
-      ul.appendChild(rigaMezzo("treno", "In treno", ferro / velTreno, ferro, "stima, cambi e attese esclusi"));
-      if (aria >= 150) {
-        ul.appendChild(rigaMezzo("aereo", "In aereo", aria / 780 + 0.5, aria, "solo volo: aggiungi ~2 h di aeroporto"));
-      }
+      // treno e aereo: li mostro solo se davvero utilizzabili (stazioni/aeroporti vicini)
+      verificaMezzi(p1, p2, aria).then(function (m) {
+        if (m.treno === false)
+          ul.appendChild(rigaNonUtile("treno", "In treno", "nessuna stazione nelle vicinanze"));
+        else
+          ul.appendChild(rigaMezzo("treno", "In treno", ferro / velTreno, ferro, "stima, cambi e attese esclusi"));
+        if (m.aereo === false || (m.aereo === null && aria < 200))
+          ul.appendChild(rigaNonUtile("aereo", "In aereo", aria < 200 ? "distanza troppo breve per volare" : "nessun aeroporto nelle vicinanze"));
+        else
+          ul.appendChild(rigaMezzo("aereo", "In aereo", aria / 780 + 0.5, aria, "solo volo: aggiungi ~2 h di aeroporto"));
+      });
       // apri lo stesso itinerario su Google Maps (indicazioni già compilate)
       var vaiGoogle = document.createElement("a");
       vaiGoogle.id = "iti-google";
