@@ -642,7 +642,7 @@
         <p class="hint">Scegli quanto tempo e in che direzione: ti dico che ore saranno (nel futuro) o che ore erano (nel passato).</p>
         <div class="riga-input" style="justify-content:flex-start">
           <label class="campo"><span class="etichetta">Quanto</span>
-            <input type="number" id="fra-quanto" value="1" min="0" max="100000" step="any" inputmode="decimal"></label>
+            <input type="number" id="fra-quanto" value="0" min="0" max="100000" step="any" inputmode="decimal"></label>
           <label class="campo"><span class="etichetta">Unità</span>
             <select id="fra-unita">
               <option value="minuti">minuti</option>
@@ -662,7 +662,7 @@
         <p class="hint">Trasforma secondi, minuti, ore, giorni e anni l'uno nell'altro.</p>
         <div class="riga-input" style="justify-content:flex-start">
           <label class="campo"><span class="etichetta">Quantità</span>
-            <input type="number" id="conv-valore" value="1" min="0" step="any" inputmode="decimal"></label>
+            <input type="number" id="conv-valore" value="0" min="0" step="any" inputmode="decimal"></label>
           <label class="campo"><span class="etichetta">Unità</span>
             <select id="conv-unita">
               <option value="secondi">secondi</option>
@@ -1261,7 +1261,7 @@
         $("timer-lettura").classList.add("allarme");
         $("timer-barra").style.width = "100%";
         document.title = "Tempo scaduto!";
-        mostraBanner("Tempo scaduto!", "Il timer da " + formatoTimer(timerTotale) + " è finito.");
+        mostraBanner("Scadenza Timer", formatoTimer(timerTotale));
         return;
       }
       $("timer-lettura").textContent = formatoTimer(Math.ceil(resta));
@@ -1447,7 +1447,7 @@
         var t = new Date(p.quando).getTime();
         if (!isNaN(t) && t <= adesso && adesso - t < 12 * 3600000) {
           p.avvisato = true; salvaPromo();
-          mostraBanner("Promemoria: " + p.testo, formattaQuando(p.quando));
+          mostraBanner("Scadenza Promemoria", p.testo);
         }
       }
     });
@@ -2353,7 +2353,7 @@
   function aggiornaFra() {
     var out = $("fra-risultato");
     var n = parseFloat($("fra-quanto").value);
-    if (isNaN(n) || n < 0) { out.textContent = "—"; return; }
+    if (isNaN(n) || n <= 0) { out.textContent = "—"; return; } // a zero: aspetta che l'utente scriva un tempo
     var passato = $("fra-verso").value === "fa";
     var ms = n * MS_UNITA[$("fra-unita").value] * (passato ? -1 : 1);
     if (Math.abs(ms) > 3155760000000) { out.textContent = "Troppo lontano nel tempo!"; return; }
@@ -2382,7 +2382,8 @@
   $("fra-verso").addEventListener("change", aggiornaFra);
 
   /* ---------- Convertitore di tempo ---------- */
-  var SEC_UNITA = { secondi: 1, minuti: 60, ore: 3600, giorni: 86400, anni: 31557600 };
+  // 1 anno = 365 giorni esatti: così 365 giorni nel convertitore danno "1", non 0,999…
+  var SEC_UNITA = { secondi: 1, minuti: 60, ore: 3600, giorni: 86400, anni: 31536000 };
   var NOMI_UNITA = { secondi: "Secondi", minuti: "Minuti", ore: "Ore", giorni: "Giorni", anni: "Anni" };
   function formattaNumero(v) {
     var cifre = v >= 100 ? 0 : (v >= 1 ? 2 : 6);
