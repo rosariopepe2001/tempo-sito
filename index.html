@@ -660,17 +660,22 @@
       </div>
       <div class="card">
         <h2>Che ora sarà?</h2>
-        <p class="hint">Scegli quanto tempo e in che direzione: ti dico che ore saranno (nel futuro) o che ore erano (nel passato).</p>
+        <p class="hint">Scegli quanto tempo (anche combinando giorni, ore, minuti e secondi) e in che direzione: ti dico che ore saranno (nel futuro) o che ore erano (nel passato).</p>
         <div class="riga-input" style="justify-content:flex-start">
-          <label class="campo"><span class="etichetta">Quanto</span>
-            <input type="number" id="fra-quanto" value="0" min="0" max="100000" step="any" inputmode="decimal"></label>
-          <label class="campo"><span class="etichetta">Unità</span>
-            <select id="fra-unita">
-              <option value="minuti">minuti</option>
-              <option value="ore" selected>ore</option>
-              <option value="giorni">giorni</option>
-            </select></label>
-          <label class="campo"><span class="etichetta">Direzione</span>
+          <div class="gruppo-numeri">
+            <label class="campo campo-num"><span class="etichetta">Giorni</span>
+              <input type="number" id="fra-giorni" value="0" min="0" max="10000" step="1" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Ore</span>
+              <input type="number" id="fra-ore" value="0" min="0" max="100000" step="1" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Minuti</span>
+              <input type="number" id="fra-minuti" value="0" min="0" max="59" step="1" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Secondi</span>
+              <input type="number" id="fra-secondi" value="0" min="0" max="59" step="1" inputmode="numeric"></label>
+          </div>
+          <label class="campo campo-verso"><span class="etichetta">Direzione</span>
             <select id="fra-verso">
               <option value="fra" selected>nel futuro</option>
               <option value="fa">nel passato</option>
@@ -680,18 +685,21 @@
       </div>
       <div class="card">
         <h2>Convertitore di tempo</h2>
-        <p class="hint">Trasforma secondi, minuti, ore, giorni e anni l'uno nell'altro.</p>
+        <p class="hint">Somma giorni, ore, minuti e secondi: ti mostro il totale in ogni unità.</p>
         <div class="riga-input" style="justify-content:flex-start">
-          <label class="campo"><span class="etichetta">Quantità</span>
-            <input type="number" id="conv-valore" value="0" min="0" step="any" inputmode="decimal"></label>
-          <label class="campo"><span class="etichetta">Unità</span>
-            <select id="conv-unita">
-              <option value="secondi">secondi</option>
-              <option value="minuti">minuti</option>
-              <option value="ore" selected>ore</option>
-              <option value="giorni">giorni</option>
-              <option value="anni">anni</option>
-            </select></label>
+          <div class="gruppo-numeri">
+            <label class="campo campo-num"><span class="etichetta">Giorni</span>
+              <input type="number" id="conv-giorni" value="0" min="0" step="1" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Ore</span>
+              <input type="number" id="conv-ore" value="0" min="0" max="23" step="1" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Minuti</span>
+              <input type="number" id="conv-minuti" value="0" min="0" max="59" step="1" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Secondi</span>
+              <input type="number" id="conv-secondi" value="0" min="0" max="59" step="1" inputmode="numeric"></label>
+          </div>
         </div>
         <ul id="conv-risultati" class="conv"></ul>
       </div>
@@ -2373,15 +2381,19 @@
   });
 
   /* ---------- Che ora sarà? ---------- */
-  var MS_UNITA = { minuti: 60000, ore: 3600000, giorni: 86400000 };
   function aggiornaFra() {
     var out = $("fra-risultato");
-    var n = parseFloat($("fra-quanto").value);
-    if (isNaN(n) || n <= 0) { // a zero: aspetta che l'utente scriva un tempo
+    var giorniIn = parseFloat($("fra-giorni").value), ore = parseFloat($("fra-ore").value),
+      minuti = parseFloat($("fra-minuti").value), secondi = parseFloat($("fra-secondi").value);
+    if (isNaN(giorniIn)) giorniIn = 0; if (isNaN(ore)) ore = 0; if (isNaN(minuti)) minuti = 0; if (isNaN(secondi)) secondi = 0;
+    if (giorniIn < 0 || ore < 0 || minuti < 0 || secondi < 0) {
       out.textContent = "Inserisci un valore per calcolare"; out.classList.add("fra-vuoto"); return;
     }
     var passato = $("fra-verso").value === "fa";
-    var ms = n * MS_UNITA[$("fra-unita").value] * (passato ? -1 : 1);
+    var ms = (giorniIn * 86400 + ore * 3600 + minuti * 60 + secondi) * 1000 * (passato ? -1 : 1);
+    if (ms === 0) { // tutto a zero: aspetta che l'utente scriva un tempo
+      out.textContent = "Inserisci un valore per calcolare"; out.classList.add("fra-vuoto"); return;
+    }
     if (Math.abs(ms) > 3155760000000) {
       out.textContent = "Troppo lontano nel tempo!"; out.classList.remove("fra-vuoto"); return;
     }
@@ -2406,8 +2418,10 @@
     out.appendChild(b);
     out.appendChild(document.createTextNode(" " + quando));
   }
-  $("fra-quanto").addEventListener("input", aggiornaFra);
-  $("fra-unita").addEventListener("change", aggiornaFra);
+  $("fra-giorni").addEventListener("input", aggiornaFra);
+  $("fra-ore").addEventListener("input", aggiornaFra);
+  $("fra-minuti").addEventListener("input", aggiornaFra);
+  $("fra-secondi").addEventListener("input", aggiornaFra);
   $("fra-verso").addEventListener("change", aggiornaFra);
 
   /* ---------- Convertitore di tempo ---------- */
@@ -2420,12 +2434,13 @@
   }
   function aggiornaConv() {
     var ul = $("conv-risultati"); ul.innerHTML = "";
-    var n = parseFloat($("conv-valore").value);
-    if (isNaN(n) || n < 0) return;
-    var unita = $("conv-unita").value;
-    var secondi = n * SEC_UNITA[unita];
+    var giorni = parseFloat($("conv-giorni").value), ore = parseFloat($("conv-ore").value),
+      minuti = parseFloat($("conv-minuti").value), secondiIn = parseFloat($("conv-secondi").value);
+    if (isNaN(giorni)) giorni = 0; if (isNaN(ore)) ore = 0;
+    if (isNaN(minuti)) minuti = 0; if (isNaN(secondiIn)) secondiIn = 0;
+    if (giorni < 0 || ore < 0 || minuti < 0 || secondiIn < 0) return;
+    var secondi = giorni * SEC_UNITA.giorni + ore * SEC_UNITA.ore + minuti * SEC_UNITA.minuti + secondiIn;
     Object.keys(SEC_UNITA).forEach(function (u) {
-      if (u === unita) return;
       var li = document.createElement("li");
       var nome = document.createElement("span"); nome.textContent = NOMI_UNITA[u];
       var val = document.createElement("b"); val.textContent = formattaNumero(secondi / SEC_UNITA[u]);
@@ -2433,8 +2448,10 @@
       ul.appendChild(li);
     });
   }
-  $("conv-valore").addEventListener("input", aggiornaConv);
-  $("conv-unita").addEventListener("change", aggiornaConv);
+  $("conv-giorni").addEventListener("input", aggiornaConv);
+  $("conv-ore").addEventListener("input", aggiornaConv);
+  $("conv-minuti").addEventListener("input", aggiornaConv);
+  $("conv-secondi").addEventListener("input", aggiornaConv);
 
   /* ---------- Campi numerici: si svuotano al tocco, per scrivere subito il numero ---------- */
   function svuotaAlFocus(id, valorePredefinito) {
@@ -2447,8 +2464,11 @@
       if (el.value === "") { el.value = valorePredefinito; el.dispatchEvent(new Event("input")); }
     });
   }
-  [["fra-quanto", "0"], ["conv-valore", "0"], ["timer-min", "5"], ["timer-sec", "0"]]
-    .forEach(function (coppia) { svuotaAlFocus(coppia[0], coppia[1]); });
+  [
+    ["fra-giorni", "0"], ["fra-ore", "0"], ["fra-minuti", "0"], ["fra-secondi", "0"],
+    ["conv-giorni", "0"], ["conv-ore", "0"], ["conv-minuti", "0"], ["conv-secondi", "0"],
+    ["timer-min", "5"], ["timer-sec", "0"]
+  ].forEach(function (coppia) { svuotaAlFocus(coppia[0], coppia[1]); });
 
   /* ---------- Battito principale ---------- */
   aggiornaOrologio();
