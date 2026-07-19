@@ -374,6 +374,10 @@
     font-variant-numeric: tabular-nums;
   }
   .fra-ris b { font-weight: 700; }
+  .fra-ris.fra-vuoto {
+    font-size: 15px; font-weight: 500; font-style: italic; color: var(--muted);
+    border: 1.5px dashed var(--line); border-radius: 10px; padding: 10px 14px;
+  }
   .conv { list-style: none; margin: 14px 0 0; padding: 0; }
   .conv li {
     display: flex; justify-content: space-between; gap: 12px;
@@ -414,6 +418,23 @@
     min-width: 0;
   }
   .campo input[type="number"] { width: 92px; text-align: center; }
+
+  /* Gruppo minuti:secondi come un'unica pillola con separatore, invece di
+     due caselle sparse: più leggibile, in stile con un conto alla rovescia. */
+  .gruppo-numeri {
+    display: flex; align-items: flex-end; gap: 1px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg); padding: 6px 8px;
+  }
+  .gruppo-numeri .campo input[type="number"] {
+    width: 54px; padding: 8px 2px; border: 0; background: transparent; text-align: center;
+  }
+  .gruppo-numeri .campo input[type="number"]:focus { outline: none; }
+  .gruppo-numeri:focus-within { border-color: var(--accent); }
+  .sep-numeri {
+    align-self: flex-end; padding-bottom: 10px;
+    font-weight: 700; font-size: 15px; color: var(--muted); user-select: none;
+  }
   .barra { height: 6px; border-radius: 3px; background: var(--line); margin-top: 18px; overflow: hidden; }
   .barra > div {
     height: 100%; width: 0%;
@@ -655,7 +676,7 @@
               <option value="fa">nel passato</option>
             </select></label>
         </div>
-        <div id="fra-risultato" class="fra-ris">—</div>
+        <div id="fra-risultato" class="fra-ris fra-vuoto">Inserisci un valore per calcolare</div>
       </div>
       <div class="card">
         <h2>Convertitore di tempo</h2>
@@ -704,10 +725,13 @@
           <button class="chip" data-min="25">25 min</button>
         </div>
         <div class="riga-input">
-          <label class="campo"><span class="etichetta">Minuti</span>
-            <input type="number" id="timer-min" min="0" max="999" value="5" inputmode="numeric"></label>
-          <label class="campo"><span class="etichetta">Secondi</span>
-            <input type="number" id="timer-sec" min="0" max="59" value="0" inputmode="numeric"></label>
+          <div class="gruppo-numeri">
+            <label class="campo campo-num"><span class="etichetta">Minuti</span>
+              <input type="number" id="timer-min" min="0" max="999" value="5" inputmode="numeric"></label>
+            <span class="sep-numeri" aria-hidden="true">:</span>
+            <label class="campo campo-num"><span class="etichetta">Secondi</span>
+              <input type="number" id="timer-sec" min="0" max="59" value="0" inputmode="numeric"></label>
+          </div>
         </div>
         <div class="lettura" id="timer-lettura">05:00</div>
         <div class="barra"><div id="timer-barra"></div></div>
@@ -2353,10 +2377,15 @@
   function aggiornaFra() {
     var out = $("fra-risultato");
     var n = parseFloat($("fra-quanto").value);
-    if (isNaN(n) || n <= 0) { out.textContent = "—"; return; } // a zero: aspetta che l'utente scriva un tempo
+    if (isNaN(n) || n <= 0) { // a zero: aspetta che l'utente scriva un tempo
+      out.textContent = "Inserisci un valore per calcolare"; out.classList.add("fra-vuoto"); return;
+    }
     var passato = $("fra-verso").value === "fa";
     var ms = n * MS_UNITA[$("fra-unita").value] * (passato ? -1 : 1);
-    if (Math.abs(ms) > 3155760000000) { out.textContent = "Troppo lontano nel tempo!"; return; }
+    if (Math.abs(ms) > 3155760000000) {
+      out.textContent = "Troppo lontano nel tempo!"; out.classList.remove("fra-vuoto"); return;
+    }
+    out.classList.remove("fra-vuoto");
     var d = new Date(Date.now() + ms);
     var oggi = new Date();
     var giorniDiff = Math.round(
@@ -2406,6 +2435,20 @@
   }
   $("conv-valore").addEventListener("input", aggiornaConv);
   $("conv-unita").addEventListener("change", aggiornaConv);
+
+  /* ---------- Campi numerici: si svuotano al tocco, per scrivere subito il numero ---------- */
+  function svuotaAlFocus(id, valorePredefinito) {
+    var el = $(id);
+    el.addEventListener("focus", function () {
+      if (el.value === "0" || el.value === valorePredefinito) { el.value = ""; el.dispatchEvent(new Event("input")); }
+      else el.select();
+    });
+    el.addEventListener("blur", function () {
+      if (el.value === "") { el.value = valorePredefinito; el.dispatchEvent(new Event("input")); }
+    });
+  }
+  [["fra-quanto", "0"], ["conv-valore", "0"], ["timer-min", "5"], ["timer-sec", "0"]]
+    .forEach(function (coppia) { svuotaAlFocus(coppia[0], coppia[1]); });
 
   /* ---------- Battito principale ---------- */
   aggiornaOrologio();
