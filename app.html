@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tempo — Tutto il tuo tempo, in un'unica app</title>
+<meta name="description" content="Tempo per iPhone: orologio mondiale, cronometro, timer, promemoria con notifiche, calendario e percorsi. Gratis su App Store.">
+<meta name="theme-color" content="#0F172A">
+<link rel="icon" href="favicon.png" type="image/png">
+<style>
+  /* ====== Design system (ui-ux-pro-max): ambra del tempo + indigo notte ====== */
+  :root {
+    --bg: #0F172A;
+    --surface: rgba(30, 38, 56, 0.62);
+    --ink: #EEF0F6;
+    --muted: #97A0B5;
+    --line: rgba(255, 255, 255, 0.08);
+    --accent: #F5A524;
+    --accent-deep: #D97706;
+    --accent2: #818CF8;
+    --radius: 24px;
+    --space-1: 8px; --space-2: 16px; --space-3: 24px;
+    --space-4: 32px; --space-5: 48px; --space-6: 72px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6; font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ---- Aurora di sfondo ---- */
+  .aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .aurora i {
+    position: absolute; border-radius: 50%; filter: blur(90px); opacity: .3;
+  }
+  .aurora .a1 {
+    width: 55vmax; height: 55vmax; top: -20vmax; left: -14vmax;
+    background: radial-gradient(circle, #F5A524, transparent 65%);
+    animation: deriva-a 36s ease-in-out infinite alternate;
+  }
+  .aurora .a2 {
+    width: 48vmax; height: 48vmax; bottom: -16vmax; right: -12vmax;
+    background: radial-gradient(circle, #6366F1, transparent 65%);
+    animation: deriva-b 46s ease-in-out infinite alternate;
+  }
+  .aurora .a3 {
+    width: 30vmax; height: 30vmax; top: 42%; left: 44%;
+    background: radial-gradient(circle, #EC4899, transparent 65%);
+    opacity: .14;
+    animation: deriva-c 54s ease-in-out infinite alternate;
+  }
+  @keyframes deriva-a { from { transform: translate(-8%, -6%) scale(1); } to { transform: translate(10%, 8%) scale(1.12); } }
+  @keyframes deriva-b { from { transform: translate(6%, 10%) scale(1.08); } to { transform: translate(-10%, -8%) scale(.95); } }
+  @keyframes deriva-c { from { transform: translate(0, 0) scale(.9); } to { transform: translate(-6%, 12%) scale(1.16); } }
+
+  .contenuto { position: relative; z-index: 1; }
+  .sezione { max-width: 1120px; margin: 0 auto; padding: var(--space-6) var(--space-3); }
+
+  /* ---- Barra di navigazione ---- */
+  .navbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(15, 23, 42, 0.65);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+    backdrop-filter: blur(20px) saturate(1.6);
+    border-bottom: 1px solid var(--line);
+  }
+  .navbar-int {
+    max-width: 1120px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px var(--space-3);
+  }
+  .marchio { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+  .marchio img { width: 38px; height: 38px; border-radius: 10px; display: block; }
+  .marchio b {
+    font-size: 20px; font-weight: 800; letter-spacing: -0.02em;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  /* ---- Pulsanti ---- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    font: inherit; font-weight: 700; font-size: 15px; text-decoration: none;
+    color: #231602; background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    border: 0; border-radius: 999px; padding: 12px 26px; cursor: pointer;
+    box-shadow: 0 8px 26px rgba(245, 165, 36, 0.28);
+    transition: transform .2s ease-out, box-shadow .2s ease-out, filter .2s ease-out;
+    min-height: 44px;
+  }
+  .btn:hover { transform: translateY(-2px); filter: brightness(1.06); box-shadow: 0 12px 34px rgba(245, 165, 36, 0.38); }
+  .btn:focus-visible { outline: 3px solid var(--accent2); outline-offset: 3px; }
+  .btn.picc { padding: 9px 18px; font-size: 14px; }
+
+  /* Badge App Store (SVG inline, niente immagini esterne) */
+  .badge-store {
+    display: inline-flex; align-items: center; gap: 14px;
+    background: #05080F; color: var(--ink); text-decoration: none;
+    border: 1.5px solid rgba(238, 240, 246, 0.35); border-radius: 16px;
+    padding: 12px 22px; min-height: 44px;
+    transition: transform .2s ease-out, border-color .2s ease-out;
+  }
+  .badge-store:hover { transform: translateY(-2px); border-color: rgba(238, 240, 246, 0.7); }
+  .badge-store:focus-visible { outline: 3px solid var(--accent2); outline-offset: 3px; }
+  .badge-store svg { width: 30px; height: 36px; flex: none; }
+  .badge-store .r1 { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.2; }
+  .badge-store .r2 { display: block; font-size: 21px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
+
+  /* ---- Hero ---- */
+  .hero {
+    display: grid; grid-template-columns: 1.1fr .9fr; gap: var(--space-5);
+    align-items: center; padding-top: var(--space-5);
+  }
+  .hero h1 {
+    margin: 0 0 var(--space-2); font-size: clamp(38px, 5.4vw, 62px);
+    font-weight: 800; letter-spacing: -0.03em; line-height: 1.08;
+  }
+  .hero h1 .sfumato {
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sotto { margin: 0 0 var(--space-4); font-size: 19px; color: var(--muted); max-width: 46ch; }
+  .hero .azioni { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+  .hero .gratis { font-size: 13.5px; color: var(--muted); }
+
+  .vetrina { display: flex; justify-content: center; }
+  .telefono {
+    width: min(320px, 78vw); border-radius: 42px; overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 40px 110px rgba(0, 0, 0, 0.55), 0 0 90px rgba(245, 165, 36, 0.12);
+    transform: rotate(2.5deg);
+    transition: transform .3s ease-out;
+  }
+  .telefono:hover { transform: rotate(0deg) scale(1.02); }
+  .telefono img { width: 100%; height: auto; display: block; }
+
+  /* ---- Titoli di sezione ---- */
+  .titolo-sez { text-align: center; margin: 0 0 var(--space-1); font-size: clamp(28px, 3.6vw, 40px); font-weight: 800; letter-spacing: -0.02em; }
+  .sotto-sez { text-align: center; margin: 0 auto var(--space-5); color: var(--muted); font-size: 17px; max-width: 56ch; }
+
+  /* ---- Griglia funzioni ---- */
+  .funzioni { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+  .scheda {
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid var(--line); border-radius: var(--radius);
+    padding: var(--space-4) var(--space-3);
+    transition: transform .25s ease-out, border-color .25s ease-out, box-shadow .25s ease-out;
+  }
+  .scheda:hover {
+    transform: translateY(-4px);
+    border-color: rgba(245, 165, 36, 0.35);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  }
+  .scheda .icona {
+    width: 52px; height: 52px; border-radius: 15px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(245, 165, 36, 0.13); color: var(--accent);
+    margin-bottom: var(--space-2);
+  }
+  .scheda .icona svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .scheda h3 { margin: 0 0 8px; font-size: 18.5px; font-weight: 700; }
+  .scheda p { margin: 0; font-size: 14.5px; color: var(--muted); line-height: 1.55; }
+
+  /* ---- Carosello schermate ---- */
+  .carosello {
+    display: flex; gap: var(--space-3); overflow-x: auto; padding: var(--space-2) var(--space-3) var(--space-4);
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    max-width: 1120px; margin: 0 auto;
+  }
+  .carosello::-webkit-scrollbar { height: 8px; }
+  .carosello::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 4px; }
+  .carosello figure {
+    margin: 0; flex: 0 0 auto; width: min(250px, 66vw); scroll-snap-align: center;
+  }
+  .carosello img {
+    width: 100%; height: auto; display: block; border-radius: 26px;
+    border: 1.5px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  }
+  .carosello figcaption { text-align: center; font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+
+  /* ---- CTA finale ---- */
+  .finale {
+    text-align: center;
+    background: var(--surface);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid var(--line); border-radius: 32px;
+    padding: var(--space-6) var(--space-3);
+    position: relative; overflow: hidden;
+  }
+  .finale::before {
+    content: ""; position: absolute; inset: -40%;
+    background: radial-gradient(circle at 50% 0%, rgba(245, 165, 36, 0.14), transparent 55%);
+    pointer-events: none;
+  }
+  .finale img.icona-app { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5); margin-bottom: var(--space-3); }
+  .finale h2 { margin: 0 0 10px; font-size: clamp(26px, 3.4vw, 38px); font-weight: 800; letter-spacing: -0.02em; }
+  .finale p { margin: 0 auto var(--space-4); color: var(--muted); max-width: 48ch; }
+
+  /* ---- Footer ---- */
+  footer { border-top: 1px solid var(--line); }
+  .footer-int {
+    max-width: 1120px; margin: 0 auto; padding: var(--space-4) var(--space-3);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+    font-size: 14px; color: var(--muted); flex-wrap: wrap;
+  }
+  .footer-int a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+  .footer-int a:hover { color: var(--ink); }
+  .footer-int a:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+
+  /* ---- Animazione d'ingresso ---- */
+  .appare { opacity: 0; transform: translateY(22px); transition: opacity .55s ease-out, transform .55s ease-out; }
+  .appare.visibile { opacity: 1; transform: none; }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; text-align: center; gap: var(--space-4); }
+    .hero .sotto { margin-left: auto; margin-right: auto; }
+    .hero .azioni { justify-content: center; }
+    .funzioni { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 560px) {
+    .funzioni { grid-template-columns: 1fr; }
+    .sezione { padding: var(--space-5) var(--space-2); }
+  }
+</style>
+</head>
+<body>
+
+<div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+
+<div class="contenuto">
+
+  <nav class="navbar" aria-label="Principale">
+    <div class="navbar-int">
+      <a class="marchio" href="#inizio" aria-label="Tempo, vai all'inizio">
+        <img src="icona-1024.png" alt="" width="38" height="38">
+        <b>Tempo</b>
+      </a>
+      <a class="btn picc" href="#scarica">Scarica</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="sezione hero" id="inizio">
+    <div>
+      <h1>Tutto il tuo tempo,<br><span class="sfumato">in un'unica app.</span></h1>
+      <p class="sotto">Orologio mondiale, cronometro, timer, promemoria con notifiche, calendario e percorsi. Semplice, veloce, in italiano.</p>
+      <div class="azioni">
+        <a class="badge-store" href="#scarica" aria-label="Scarica Tempo su App Store">
+          <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          <span><span class="r1">Scarica su</span><span class="r2">App Store</span></span>
+        </a>
+        <span class="gratis">Gratis · per iPhone</span>
+      </div>
+    </div>
+    <div class="vetrina">
+      <div class="telefono"><img src="promo/screen-1.png" alt="La schermata Orologio dell'app Tempo con quadrante analogico e ora digitale" width="640" height="1386"></div>
+    </div>
+  </header>
+
+  <!-- FUNZIONI -->
+  <section class="sezione" aria-labelledby="t-funzioni">
+    <h2 class="titolo-sez appare" id="t-funzioni">Sei strumenti. Zero complicazioni.</h2>
+    <p class="sotto-sez appare">Tutto quello che riguarda il tuo tempo, riunito in un'app leggera che funziona anche senza connessione.</p>
+    <div class="funzioni">
+      <article class="scheda appare">
+        <div class="icona" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <h3>Orologio nel mondo</h3>
+        <p>L'ora esatta di qualsiasi città, con il sole di giorno e la luna di notte. E scopri che ora sarà fra ore, minuti e secondi.</p>
+      </article>
+      <article class="scheda appare">
+        <div class="icona" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg></div>
+        <h3>Cronometro</h3>
+        <p>Preciso al centesimo di secondo, con i giri intermedi per allenamenti e gare.</p>
+      </article>
+      <article class="scheda appare">
+        <div class="icona" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2h12M8 2v4l4 4 4-4V2M8 22v-4l4-4 4 4v4M6 22h12"/></svg></div>
+        <h3>Timer</h3>
+        <p>Pronto in un tocco: 1, 3, 5, 10 o 25 minuti, oppure il tempo che scegli tu. Ti avvisa anche ad app chiusa.</p>
+      </article>
+      <article class="scheda appare">
+        <div class="icona" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 12l3 3 5-6"/></svg></div>
+        <h3>Promemoria</h3>
+        <p>Scrivi cosa e quando: la notifica suona all'ora giusta, anche con l'iPhone in tasca e l'app chiusa.</p>
+      </article>
+      <article class="scheda appare">
+        <div class="icona" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></div>
+        <h3>Calendario</h3>
+        <p>Eventi e promemoria mese per mese, a colpo d'occhio, con la vista di tutto l'anno.</p>
+      </article>
+      <article class="scheda appare">
+        <div class="icona" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h7"/></svg></div>
+        <h3>Percorsi</h3>
+        <p>Da dove sei a dove vuoi andare: distanza, mappa e tempi di viaggio per ogni mezzo, dal treno all'aereo.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- SCHERMATE -->
+  <section aria-labelledby="t-schermate">
+    <div class="sezione" style="padding-bottom: 0">
+      <h2 class="titolo-sez appare" id="t-schermate">Guardala da vicino.</h2>
+      <p class="sotto-sez appare">Scorri le schermate: è così che Tempo ti accompagna ogni giorno.</p>
+    </div>
+    <div class="carosello" role="group" aria-label="Schermate dell'app">
+      <figure><img src="promo/screen-1.png" alt="Schermata Orologio" loading="lazy" width="640" height="1386"><figcaption>Orologio</figcaption></figure>
+      <figure><img src="promo/screen-2.png" alt="Schermata Cronometro e Timer" loading="lazy" width="640" height="1386"><figcaption>Cronometro e Timer</figcaption></figure>
+      <figure><img src="promo/screen-3.png" alt="Schermata Promemoria" loading="lazy" width="640" height="1386"><figcaption>Promemoria</figcaption></figure>
+      <figure><img src="promo/screen-4.png" alt="Schermata Calendario" loading="lazy" width="640" height="1386"><figcaption>Calendario</figcaption></figure>
+      <figure><img src="promo/screen-5.png" alt="Schermata Fusi orari nel mondo" loading="lazy" width="640" height="1386"><figcaption>Nel mondo</figcaption></figure>
+      <figure><img src="promo/screen-6.png" alt="Schermata Percorsi con mappa" loading="lazy" width="640" height="1386"><figcaption>Percorsi</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- CTA FINALE -->
+  <section class="sezione" id="scarica" aria-labelledby="t-scarica">
+    <div class="finale appare">
+      <img class="icona-app" src="icona-1024.png" alt="" width="96" height="96">
+      <h2 id="t-scarica">Il tuo tempo ti aspetta.</h2>
+      <p>Scarica Tempo gratis dall'App Store e porta orologio, timer, promemoria, calendario e percorsi sempre con te.</p>
+      <a class="badge-store" href="#" aria-label="Scarica Tempo su App Store">
+        <svg viewBox="0 0 384 512" fill="currentColor" aria-hidden="true"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+        <span><span class="r1">Scarica su</span><span class="r2">App Store</span></span>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-int">
+      <span>© 2026 Rosario Pepe · Tempo — Gestione del tempo</span>
+      <span><a href="privacy.html">Privacy Policy</a> · <a href="index.html">Versione web</a></span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // Comparsa morbida delle sezioni allo scorrimento (rispetta reduced-motion)
+  (function () {
+    var riduci = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var elementi = document.querySelectorAll(".appare");
+    if (riduci || !("IntersectionObserver" in window)) {
+      elementi.forEach(function (el) { el.classList.add("visibile"); });
+      return;
+    }
+    var oss = new IntersectionObserver(function (voci) {
+      voci.forEach(function (v) {
+        if (v.isIntersecting) { v.target.classList.add("visibile"); oss.unobserve(v.target); }
+      });
+    }, { threshold: 0.14 });
+    elementi.forEach(function (el) { oss.observe(el); });
+  })();
+</script>
+
+</body>
+</html>
